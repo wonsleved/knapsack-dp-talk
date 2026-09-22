@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0F1620">
+<title>Метод динамического программирования для задачи о рюкзаке</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ======================================================================
+   tokens
+   ====================================================================== */
+:root{
+  --bg:#0F1620; --ink:#E7ECF3; --muted:#9AA7B7; --line:#26313F; --panel:#172130; --panel2:#1E2A3B;
+  --take:#F2B23B; --take-bg:rgba(242,178,59,.18);
+  --copy:#3FD2B8; --copy-bg:rgba(63,210,184,.16);
+  --cur:#7AA7FF;  --cur-bg:rgba(122,167,255,.22);
+  --path:#FF7A7A; --path-bg:rgba(255,122,122,.16);
+  --sans:"IBM Plex Sans",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:"IBM Plex Mono","SF Mono",Menlo,Consolas,monospace;
+  box-sizing:border-box;
+}
+:root[data-theme="light"]{
+  --bg:#F4F6F9; --ink:#141C27; --muted:#55616F; --line:#CDD4DD; --panel:#FFFFFF; --panel2:#E8ECF2;
+  --take:#A85F00; --take-bg:rgba(199,120,0,.16);
+  --copy:#0B7D6B; --copy-bg:rgba(14,140,120,.14);
+  --cur:#2452C4;  --cur-bg:rgba(47,95,208,.14);
+  --path:#C93030; --path-bg:rgba(214,58,58,.12);
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:24px;line-height:1.35;overflow:hidden;
+  -webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
+p{margin:0}
+/* индексы: крупнее и с явным смещением, чтобы читались с проектора */
+sub,sup{font-size:.74em;line-height:0;position:relative;vertical-align:baseline}
+sup{top:-.55em} sub{top:.28em}
+sub sub{font-size:.85em}
+code,.m{font-family:var(--mono)}
+a{color:var(--cur);text-decoration:none}
+button{font:inherit}
+b{font-weight:600}
+
+/* ======================================================================
+   stage / slides
+   ====================================================================== */
+#stage{position:fixed;left:0;top:0;width:1280px;height:720px;transform-origin:0 0;background:var(--bg)}
+.slide{position:absolute;inset:0;padding:56px 80px 76px;display:none;flex-direction:column;gap:20px}
+.slide.active{display:flex}
+.slide h2{font-size:40px;line-height:1.15;margin-bottom:2px}
+.slide h2 small{display:block;font-size:22px;font-weight:400;color:var(--muted);margin-top:6px}
+.lead{font-size:26px;max-width:26em}
+.muted{color:var(--muted)}
+.row{display:flex;gap:36px;align-items:flex-start;min-width:0}
+.col{flex:1;min-width:0}
+.grow{flex:1}
+ul.plain{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:12px}
+ul.plain li{padding-left:24px;position:relative}
+ul.plain li::before{content:"";position:absolute;left:0;top:.62em;width:11px;height:2px;background:var(--muted)}
+.foot{position:absolute;left:80px;right:80px;bottom:26px;display:flex;justify-content:space-between;align-items:center;font-size:17px;color:var(--muted)}
+.foot .num{font-family:var(--mono)}
+.foot .sec{font-family:var(--mono);color:var(--cur);margin-right:14px}
+#bar{position:fixed;left:0;bottom:0;height:3px;background:var(--cur);width:0;transition:width .25s;z-index:5}
+
+/* fragments */
+.frag{opacity:0;transition:opacity .35s}
+.frag.on{opacity:1}
+@media (prefers-reduced-motion:reduce){.frag,.dp td,.bit{transition:none!important}}
+
+/* panels & chips */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 20px;font-size:21px}
+.panel h3{font-size:23px;margin-bottom:8px}
+.panel.tight{padding:12px 14px}
+.k{display:inline-block;padding:1px 9px;border-radius:6px;font-family:var(--mono);font-size:.9em}
+.k.take{background:var(--take-bg);color:var(--take)}
+.k.copy{background:var(--copy-bg);color:var(--copy)}
+.k.cur{background:var(--cur-bg);color:var(--cur)}
+.k.path{background:var(--path-bg);color:var(--path)}
+.formula{font-family:var(--mono);font-size:26px;line-height:1.55;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 26px;overflow:hidden}
+.formula .take{color:var(--take)} .formula .copy{color:var(--copy)} .formula .cur{color:var(--cur)} .formula .path{color:var(--path)}
+.formula.sm{font-size:22px}
+.callout{border-left:4px solid var(--cur);padding:6px 18px;font-size:22px}
+
+/* pseudocode */
+.code{font-family:var(--mono);font-size:20px;line-height:1.5;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 22px;white-space:pre;overflow:hidden}
+.code .kw{color:var(--cur)} .code .c{color:var(--muted)} .code .take{color:var(--take)} .code .copy{color:var(--copy)} .code .path{color:var(--path)}
+.code b{color:var(--ink);font-weight:600}
+.code.sm{font-size:18px}
+.code.xs{font-size:16px;line-height:1.45}
+
+/* items (рюкзачный вектор) */
+.items{display:flex;gap:12px;align-items:flex-end}
+.item{width:78px;text-align:center}
+.item .box{border:2px solid var(--line);border-radius:10px;background:var(--panel);font-family:var(--mono);font-size:32px;font-weight:600;padding:8px 0}
+.item .lab{font-size:17px;color:var(--muted);margin-top:5px;font-family:var(--mono)}
+.item.hot .box{border-color:var(--cur);background:var(--cur-bg);color:var(--cur)}
+.item.take .box{border-color:var(--take);background:var(--take-bg);color:var(--take)}
+.item.skip .box{opacity:.4}
+.items.sm .item{width:56px} .items.sm .item .box{font-size:24px;padding:6px 0}
+.target{display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:28px}
+.target b{font-size:40px;color:var(--cur);font-weight:600}
+
+/* DP table */
+table.dp{border-collapse:separate;border-spacing:4px;font-family:var(--mono);font-size:23px}
+table.dp th,table.dp td{width:57px;height:47px;text-align:center;border-radius:8px}
+table.dp th{color:var(--muted);font-weight:500;font-size:19px}
+table.dp th.k{width:auto;padding:0 10px;white-space:nowrap}
+table.dp td{background:var(--panel);border:1px solid var(--line);transition:background .25s,border-color .25s,color .25s,opacity .3s}
+table.dp tr.rowfrag td{opacity:0;transition-delay:calc(var(--i)*55ms)}
+table.dp tr.rowfrag.on td{opacity:1}
+table.dp td.zero{color:var(--muted)}
+table.dp td.cur{background:var(--cur-bg);border-color:var(--cur);color:var(--cur);font-weight:600}
+table.dp td.take{background:var(--take-bg);border-color:var(--take);color:var(--take);font-weight:600}
+table.dp td.copy{background:var(--copy-bg);border-color:var(--copy);color:var(--copy);font-weight:600}
+table.dp td.bad{background:var(--path-bg);border-color:var(--path);color:var(--path);font-weight:600}
+table.dp.sm{font-size:20px} table.dp.sm th,table.dp.sm td{width:46px;height:40px}
+table.dp.xs{font-size:18px;border-spacing:3px} table.dp.xs th,table.dp.xs td{width:35px;height:36px;border-radius:6px} table.dp.xs th{font-size:15px} table.dp.xs th.k{padding:0 6px;width:auto}
+
+/* steps list */
+.steps{display:flex;flex-direction:column;gap:10px;font-size:21px}
+.steps .st{padding:10px 14px;border-radius:9px;border:1px solid var(--line);background:var(--panel)}
+.steps .st .m{font-size:.95em}
+.steps .st.take{border-color:var(--take)} .steps .st.copy{border-color:var(--copy)} .steps .st.cur{border-color:var(--cur)}
+
+/* bits */
+.bits{display:flex;flex-direction:column;gap:8px;font-family:var(--mono)}
+.bitrow{display:flex;align-items:center;gap:14px}
+.bitrow .lab{width:190px;color:var(--muted);font-size:19px;white-space:nowrap}
+.bitrow .cells{display:flex;gap:4px}
+.bit{width:40px;height:40px;border-radius:7px;border:1px solid var(--line);background:var(--panel);display:flex;align-items:center;justify-content:center;font-size:21px;color:var(--muted)}
+.bit.one{background:var(--cur-bg);border-color:var(--cur);color:var(--cur);font-weight:600}
+.bit.new{background:var(--take-bg);border-color:var(--take);color:var(--take);font-weight:600}
+.bitidx .bit{border:none;background:none;height:24px;font-size:16px}
+
+/* cards / compare */
+.cards{display:flex;gap:22px}
+.card{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 22px;display:flex;flex-direction:column;gap:8px;font-size:20px;min-width:0}
+.card h3{font-size:24px}
+.card .big{font-family:var(--mono);font-size:30px;color:var(--cur)}
+.card.hl{border-color:var(--cur);box-shadow:0 0 0 2px var(--cur-bg)}
+table.cmp{border-collapse:collapse;font-size:20px;width:100%}
+table.cmp th,table.cmp td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+table.cmp th{color:var(--muted);font-weight:500}
+table.cmp td:first-child{color:var(--muted)}
+table.cmp.compact th,table.cmp.compact td{padding:5px 10px}
+.panel.mid{padding:13px 18px}
+table.cmp.data{font-family:var(--mono);font-size:16px}
+table.cmp.data th,table.cmp.data td{padding:3px 8px;text-align:right}
+table.cmp.data th:first-child,table.cmp.data td:first-child{text-align:left;color:var(--ink)}
+
+/* timeline */
+.tl{display:flex;flex-direction:column;gap:8px;font-size:21px}
+.tl.dense{font-size:20px;gap:6px}
+.tl .r{display:grid;grid-template-columns:96px 1fr;column-gap:16px;align-items:baseline}
+.tl .y{font-family:var(--mono);color:var(--muted)}
+.tl .t b{font-weight:600}
+.tl .t .m{font-size:.95em;color:var(--cur)}
+
+/* density axis */
+.axis{position:relative;height:250px}
+.axis .line{position:absolute;left:0;right:0;top:150px;height:3px;background:var(--line)}
+.axis .tick{position:absolute;top:138px;width:3px;height:27px;background:var(--muted)}
+.axis .lab{position:absolute;top:176px;transform:translateX(-50%);text-align:center;font-family:var(--mono);font-size:20px;color:var(--muted);white-space:nowrap}
+.axis .zone{position:absolute;top:6px;height:122px;border-radius:10px;padding:10px 14px;font-size:19px;line-height:1.3}
+.axis .zone.lll{background:var(--copy-bg);color:var(--copy)}
+.axis .zone.hard{background:var(--path-bg);color:var(--path)}
+.axis .zone.dp{background:var(--take-bg);color:var(--take)}
+
+/* charts (svg масштабируется под контейнер) */
+.chart{width:100%}
+.chart svg{width:100%;height:auto;display:block}
+svg text{font-family:var(--sans);fill:var(--muted);font-size:15px}
+svg .ax{stroke:var(--line);stroke-width:1}
+svg .grid{stroke:var(--line);stroke-width:1;stroke-dasharray:3 4}
+svg .ref{stroke:var(--path);stroke-width:1.5;stroke-dasharray:6 5}
+svg .lbl{fill:var(--ink)}
+svg .mono{font-family:var(--mono)}
+
+/* parallel diagram */
+.par{display:grid;grid-template-columns:120px 1fr;row-gap:8px;column-gap:14px;align-items:center;font-family:var(--mono);font-size:19px}
+.par .rl{color:var(--muted);text-align:right}
+.par .strip{display:flex;gap:4px}
+.par .seg{flex:1;height:38px;border-radius:7px;border:1px solid var(--line);background:var(--panel);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:16px;white-space:nowrap}
+.par .seg.p0{background:var(--cur-bg);border-color:var(--cur);color:var(--cur)}
+.par .seg.p1{background:var(--copy-bg);border-color:var(--copy);color:var(--copy)}
+.par .seg.p2{background:var(--take-bg);border-color:var(--take);color:var(--take)}
+.par .seg.p3{background:var(--path-bg);border-color:var(--path);color:var(--path)}
+.par .barrier{grid-column:1/3;height:2px;background:repeating-linear-gradient(90deg,var(--muted) 0 10px,transparent 10px 18px);position:relative;margin:2px 0}
+.par .barrier span{position:absolute;right:0;top:-12px;font-size:15px;color:var(--muted);background:var(--bg);padding:0 6px}
+
+/* agenda */
+.agenda{display:grid;grid-template-columns:1fr 1fr;gap:14px 40px;font-size:23px;counter-reset:ag}
+.agenda div{display:grid;grid-template-columns:44px 1fr;align-items:baseline;padding:10px 0;border-bottom:1px solid var(--line)}
+.agenda div::before{counter-increment:ag;content:counter(ag);font-family:var(--mono);color:var(--cur);font-size:26px}
+.agenda small{display:block;color:var(--muted);font-size:18px;margin-top:2px}
+
+/* title */
+.title{justify-content:center;gap:28px}
+.title h1{font-size:56px;line-height:1.1;max-width:18em}
+.title .sub{font-size:26px;color:var(--muted);max-width:30em}
+.title .meta{margin-top:20px;font-size:21px;color:var(--muted);line-height:1.6}
+.hint{position:absolute;right:80px;bottom:72px;font-size:17px;color:var(--muted);text-align:right;line-height:1.7}
+.hint .k{background:var(--panel);border:1px solid var(--line);color:var(--muted)}
+
+/* ======================================================================
+   controls (проектор)
+   ====================================================================== */
+#ui{position:fixed;top:14px;right:16px;display:flex;gap:8px;z-index:6;opacity:.25;transition:opacity .2s}
+#ui:hover,#ui:focus-within{opacity:1}
+#ui button{background:var(--panel);color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:14px;cursor:pointer}
+#ui button:hover,#ui button:focus-visible{color:var(--ink);border-color:var(--cur);outline:none}
+#help{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:8}
+#help.open{display:flex}
+#help .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:26px 32px;font-size:17px;line-height:1.9;color:var(--ink)}
+#help .k{background:var(--panel2);color:var(--ink);margin-right:8px}
+.notes{display:none}
+
+/* ======================================================================
+   presenter view (телефон докладчика) — включается только на телефоне
+   или по ?presenter; на проекторе не показывается и переключатель скрыт
+   ====================================================================== */
+#pv{display:none}
+body.presenter{overflow:hidden;font-size:17px;background:var(--bg)}
+body.presenter #ui,body.presenter #bar,body.presenter .hint{display:none!important}
+body.presenter #pv{display:flex;flex-direction:column;position:fixed;inset:0;
+  padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+#pv-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px 6px;font-size:14px;color:var(--muted);font-family:var(--mono)}
+#pv-head b{color:var(--ink);font-weight:500}
+#pv-head .tm{font-variant-numeric:tabular-nums;padding:4px 10px;border:1px solid var(--line);border-radius:8px;color:var(--ink)}
+#pv-head .tm.warn{color:var(--take);border-color:var(--take)}
+#pv-frame{position:relative;margin:0 12px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--bg);flex:none}
+#pv-next{padding:6px 14px 4px;font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pv-next b{color:var(--ink);font-weight:500}
+#pv-text{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:6px 16px 20px;font-size:18px;line-height:1.5;overscroll-behavior:contain}
+#pv-text p{margin:0 0 .8em}
+#pv-text .go{display:inline-block;padding:0 8px;border-radius:6px;background:var(--cur-bg);color:var(--cur);font-family:var(--mono);font-size:.85em;line-height:1.5;margin:0 2px}
+#pv-text .sec{color:var(--muted);font-size:13px;font-family:var(--mono);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em}
+#pv-nav{display:flex;gap:10px;padding:8px 12px 10px;border-top:1px solid var(--line);background:var(--bg)}
+#pv-nav button{flex:1;height:58px;border-radius:14px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:19px;font-weight:500;-webkit-tap-highlight-color:transparent}
+#pv-nav button:active{background:var(--panel2)}
+#pv-nav button.primary{flex:2;background:var(--cur-bg);border-color:var(--cur);color:var(--cur)}
+#pv-nav .sm{flex:0 0 58px;font-size:17px;color:var(--muted)}
+#pv-fs{display:flex;gap:6px}
+#pv-fs button,#pv-slides{background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:3px 8px;font-size:13px;font-family:var(--mono)}
+#pv-back{display:none;position:fixed;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:9;background:var(--panel);color:var(--muted);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:14px}
+body.phone.unlocked:not(.presenter) #pv-back{display:block}
+@media (orientation:landscape){
+  body.presenter #pv{display:grid;grid-template-columns:minmax(300px,42%) 1fr;grid-template-rows:auto auto 1fr auto;
+    grid-template-areas:"head head" "frame text" "next text" "nav nav";column-gap:12px}
+  body.presenter #pv-head{grid-area:head}
+  body.presenter #pv-frame{grid-area:frame;margin:0 0 0 12px}
+  body.presenter #pv-next{grid-area:next;margin-left:12px;white-space:normal;padding-top:8px}
+  body.presenter #pv-text{grid-area:text;min-height:0;padding-top:0;padding-right:16px}
+  body.presenter #pv-nav{grid-area:nav}
+  body.presenter #pv-nav button{height:50px}
+}
+
+/* ======================================================================
+   print → PDF (все шаги раскрыты, один слайд на страницу 1280×720 px)
+   ====================================================================== */
+@page{size:338.67mm 190.5mm;margin:0}
+@media print{
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  html,body{overflow:visible;height:auto;background:var(--bg)}
+  #ui,#bar,#help,#pv,#pv-back,.hint{display:none!important}
+  #stage{position:static!important;transform:none!important;width:1280px!important;height:auto!important}
+  .slide{display:flex!important;position:relative!important;inset:auto!important;width:1280px;height:720px;margin:0;page-break-after:always;break-after:page;overflow:hidden;background:var(--bg)}
+  .slide:last-child{page-break-after:auto;break-after:auto}
+  .frag,table.dp tr.rowfrag td{opacity:1!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <button id="btnTheme" title="Тема (T)">Тема</button>
+  <button id="btnPdf" title="Печать / PDF (P)">PDF</button>
+  <button id="btnHelp" title="Клавиши (?)">?</button>
+</div>
+<div id="bar"></div>
+<div id="help"><div class="box">
+  <div><span class="k">→ Space PgDn</span> следующий шаг / слайд</div>
+  <div><span class="k">← PgUp</span> назад</div>
+  <div><span class="k">Home End</span> первый / последний слайд</div>
+  <div><span class="k">1…9 + Enter</span> перейти к слайду по номеру</div>
+  <div><span class="k">T</span> тёмная / светлая тема</div>
+  <div><span class="k">F</span> полный экран</div>
+  <div><span class="k">P</span> печать в PDF (все шаги раскрыты)</div>
+  <div><span class="k">B</span> погасить экран</div>
+  <div><span class="k">?</span> закрыть подсказку</div>
+</div></div>
+
+<!-- режим докладчика (телефон) -->
+<div id="pv">
+  <div id="pv-head">
+    <span><b id="pv-num">1</b>/<span id="pv-total"></span> · шаг <span id="pv-step">0/0</span></span>
+    <span id="pv-fs"><button data-d="-1">A−</button><button data-d="1">A+</button><button id="pv-slides">слайды</button></span>
+    <span class="tm" id="pv-timer" title="нажать — сброс">00:00</span>
+  </div>
+  <div id="pv-frame"></div>
+  <div id="pv-next"></div>
+  <div id="pv-text"></div>
+  <div id="pv-nav">
+    <button id="pv-prev">‹ Назад</button>
+    <button id="pv-next-btn" class="primary">Далее ›</button>
+  </div>
+</div>
+<button id="pv-back">доклад</button>
+
+<div id="stage">
+
+<!-- ================================================================ 1. ТИТУЛ -->
+<section class="slide title" data-sec="">
+  <p class="muted">РиААКП · Тема 2.1 · НИЯУ МИФИ</p>
+  <h1>Метод динамического программирования для задачи о рюкзаке</h1>
+  <p class="sub">Точное решение: разбор алгоритма, оценка сложности, последовательная и параллельная реализации, современное состояние</p>
+  <div class="hint"><span class="k">→</span> вперёд &nbsp; <span class="k">T</span> тема &nbsp; <span class="k">?</span> все клавиши</div>
+  <div class="notes">Здравствуйте. Тема доклада: метод динамического программирования для задачи о рюкзаке. Это тема 2.1 первой части курса. Она продолжает разговор о точных методах решения рюкзачной задачи, который коллеги начали на прошлой неделе с полного перебора и обхода дерева укладок.</div>
+</section>
+
+<!-- ================================================================ 3. ИСТОРИЯ -->
+<section class="slide" data-sec="1">
+  <h2>История: от Беллмана до рюкзачной криптографии<small>от метода до базовой публикации</small></h2>
+  <div class="row">
+    <div class="col">
+      <div class="tl dense">
+        <div class="r"><span class="y">1957</span><span class="t"><b>Беллман</b>: динамическое программирование — большая задача через решения меньших</span></div>
+        <div class="r frag"><span class="y">1972</span><span class="t">Задача о рюкзаке (Subset Sum) — NP-полная: полиномиального алгоритма, скорее всего, нет</span></div>
+        <div class="r frag"><span class="y">1978</span><span class="t"><b>Меркль, Хеллман</b>: первая рюкзачная криптосистема с открытым ключом; 1982 — взлом Шамиром</span></div>
+        <div class="r frag"><span class="y">1985–92</span><span class="t">Атаки низкой плотности: рюкзак с D &lt; 0,94 сводится к короткому вектору решётки и решается алгоритмом LLL</span></div>
+        <div class="r frag"><span class="y">2012–15</span><span class="t">Новые рюкзачные системы (Касахара, Растаги, Осипян) повышают плотность, уходя от LLL</span></div>
+        <div class="r frag"><span class="y">2014–</span><span class="t"><b>Куприяшин, Борзунов</b>: серия работ о точных методах — перебор, дерево укладок, ДП</span></div>
+      </div>
+    </div>
+    <div class="col" style="flex:0 0 400px">
+      <div class="panel frag">
+        <h3>Область применения</h3>
+        <p>Криптоанализ рюкзачных систем шифрования: восстановить открытый текст — значит найти укладку с весом <b>ровно</b> w. Приближённое решение бесполезно.</p>
+        <p class="muted" style="margin-top:10px;font-size:19px">Время точного решения = практическая стойкость системы.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Введение · история</span><span class="num"></span></div>
+  <div class="notes">Коротко об истории. Сам метод динамического программирования Ричард Беллман сформулировал в 1957 году: решение большой задачи собирается из решений меньших. ⏵ В 1972 году задача о рюкзаке попала в список NP-полных задач. Полиномиального алгоритма для неё, скорее всего, нет. ⏵ В 1978 году Меркль и Хеллман построили на этой задаче первую криптосистему с открытым ключом. В 1982 году Шамир её взломал, причём не решая рюкзак в общем виде, а используя структуру ключа. ⏵ Дальше появились атаки низкой плотности. Если плотность вектора ниже примерно 0,94, задача сводится к поиску короткого вектора решётки и решается алгоритмом LLL. Об этом будет следующий доклад. ⏵ Разработчики шифров ответили новыми системами с высокой плотностью, чтобы уйти от LLL. ⏵ И наконец серия работ Куприяшина и Борзунова, где точные методы, то есть перебор, дерево укладок и ДП, рассмотрены с точки зрения криптоанализа. ⏵ Область применения одна: криптоанализ рюкзачных шифров. Там нужен вес ровно w, а время точного решения и есть стойкость системы.</div>
+</section>
+
+<!-- ================================================================ 4. ПОСТАНОВКА -->
+<section class="slide" data-sec="1">
+  <h2>Задача о рюкзаке<small>в формулировке для криптографии: у предмета есть только вес</small></h2>
+  <div class="row">
+    <div class="col">
+      <p class="lead">Дан рюкзачный вектор <span class="m">a = (a<sub>1</sub>, …, a<sub>n</sub>)</span> и целевой вес <span class="m">w</span>. Найти вектор укладки <span class="m">x ∈ {0,1}<sup>n</sup></span>, для которого</p>
+      <div class="formula" style="margin-top:16px">Σ a<sub>i</sub> · x<sub>i</sub> = w</div>
+      <ul class="plain" style="margin-top:22px;font-size:22px">
+        <li class="frag">Плотность вектора <span class="m">D = n / log<sub>2</sub> a<sub>max</sub></span> — сколько предметов приходится на один бит веса</li>
+        <li class="frag">D ≈ 1: веса длинные, решений почти нет. D ≫ 1: веса короткие, решений много</li>
+        <li class="frag">Стойкость рюкзачной системы = время <b>точного</b> решения</li>
+      </ul>
+    </div>
+    <div class="col" style="flex:0 0 470px">
+      <div class="panel">
+        <h3>Модельный пример</h3>
+        <div class="items" style="margin:14px 0 18px">
+          <div class="item"><div class="box">1</div><div class="lab">a<sub>1</sub></div></div>
+          <div class="item"><div class="box">4</div><div class="lab">a<sub>2</sub></div></div>
+          <div class="item"><div class="box">5</div><div class="lab">a<sub>3</sub></div></div>
+          <div class="item"><div class="box">6</div><div class="lab">a<sub>4</sub></div></div>
+          <div class="item"><div class="box">9</div><div class="lab">a<sub>5</sub></div></div>
+        </div>
+        <div class="target">целевой вес <b>w = 10</b></div>
+        <p class="muted" style="font-size:19px;margin-top:14px">n = 5, укладок 2<sup>5</sup> = 32, D = 5 / log<sub>2</sub> 9 ≈ 1,58</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Введение · постановка задачи</span><span class="num"></span></div>
+  <div class="notes">Постановка задачи: у каждого предмета есть только вес, никакой ценности. Дан рюкзачный вектор из n весов и целевой вес w. Нужно найти двоичный вектор укладки x, при котором сумма выбранных весов равна ровно w. ⏵ Главный параметр задачи, плотность D, это отношение числа предметов к длине максимального веса в битах. ⏵ При плотности около единицы веса длинные, и укладка с нужным весом либо одна, либо её нет. При большой плотности разных весов мало, а решений много. От плотности зависит, какая атака опасна, и к этому я вернусь в конце. ⏵ Для криптографа важно вот что: стойкость системы равна времени точного решения. Справа пример, который будем разбирать: пять предметов с весами 1, 4, 5, 6, 9 и целевой вес 10. Всего 32 укладки, плотность около 1,6.</div>
+</section>
+
+<!-- ================================================================ 5. ТРИ ПОДХОДА -->
+<section class="slide" data-sec="1">
+  <h2>Три точных метода<small>что общего и в чём принципиальное отличие ДП</small></h2>
+  <div class="cards">
+    <div class="card">
+      <h3>Полный перебор</h3>
+      <div class="big">2<sup>n</sup> укладок</div>
+      <p>Перечисляем векторы x, проверяем сумму.</p>
+      <p class="muted">Легко параллелится, но нагрузка на процессоры неравномерна: проверка укладки стоит по-разному.</p>
+    </div>
+    <div class="card">
+      <h3>Обход дерева укладок</h3>
+      <div class="big">≤ 2<sup>n</sup>, обычно меньше</div>
+      <p>Дерево вариантов, ветви с весом больше w отсекаются.</p>
+      <p class="muted">Линеаризация дерева даёт равномерное статическое распределение по процессорам.</p>
+    </div>
+    <div class="card hl">
+      <h3>Динамическое программирование</h3>
+      <div class="big">n · w ячеек</div>
+      <p><b>Перебираем не укладки, а веса</b>: для первых k предметов и каждого веса s ≤ w храним лучший результат.</p>
+      <p class="muted">Общее со всеми: укладки с весом &gt; w не рассматриваются — граница таблицы и есть отсечение.</p>
+    </div>
+  </div>
+  <p class="frag callout">Все три метода точные. ДП меняет объект перебора — и вместе с ним всю картину сложности: время перестаёт зависеть от 2<sup>n</sup>, но начинает зависеть от величины w.</p>
+  <div class="foot"><span>Введение · место ДП среди методов</span><span class="num"></span></div>
+  <div class="notes">Напомню три точных метода. Полный перебор: два в степени n укладок. Он тривиально параллелится, но, как показано в работе Борзунова и Куприяшина 2015 года, нагрузка на процессоры неравномерна, потому что проверка разных укладок стоит по-разному. Обход дерева укладок: ветви с весом больше w отсекаются, а линеаризация дерева даёт равномерное статическое распределение работы. И динамическое программирование. Его основная мысль: перебору подлежат возможные веса и наборы предметов, а не варианты укладок. Общее у всех трёх методов одно: отсечение укладок с весом больше w. В ДП это просто граница таблицы. ⏵ Все три метода точные. Но ДП меняет объект перебора, и вместе с ним меняется вся картина сложности. Время перестаёт зависеть от двух в степени n и начинает зависеть от величины w.</div>
+</section>
+
+<!-- ================================================================ 6. ИДЕЯ -->
+<section class="slide" data-sec="2">
+  <h2>Идея метода<small>решаем большую задачу через решения меньших</small></h2>
+  <div class="row">
+    <div class="col">
+      <ul class="plain" style="font-size:23px">
+        <li>Подзадача <span class="m">(k, s)</span>: только первые <span class="m">k</span> предметов, вместимость <span class="m">s</span></li>
+        <li class="frag"><span class="m">A<sub>k,s</sub></span> — максимальный вес укладки из первых k предметов, <b>не превышающий</b> s</li>
+        <li class="frag">Ответ — в ячейке <span class="m">A<sub>n,w</sub></span>. Если <span class="m">A<sub>n,w</sub> = w</span>, укладка с весом w существует</li>
+        <li class="frag">Каждый новый предмет — одно управляющее решение: <span class="k take">взять</span> его, освободив место за счёт старых, или <span class="k copy">оставить</span> прежнюю укладку</li>
+        <li class="frag">Принцип оптимальности: если предмет взят, остаток <span class="m">s − a<sub>k</sub></span> заполнен оптимально — а это уже посчитано в предыдущей строке</li>
+      </ul>
+    </div>
+    <div class="col" style="flex:0 0 480px">
+      <div class="panel">
+        <h3>Таблица A размером (n+1) × (w+1)</h3>
+        <div class="chart"><svg viewBox="0 0 430 250">
+          <rect x="60" y="40" width="360" height="200" rx="8" fill="var(--panel2)" stroke="var(--line)"/>
+          <text x="240" y="26" text-anchor="middle" class="lbl" font-size="17">s = 0 … w (вместимость)</text>
+          <text x="20" y="140" text-anchor="middle" transform="rotate(-90 20 140)" class="lbl" font-size="17">k = 0 … n (предметы)</text>
+          <rect x="60" y="40" width="360" height="30" fill="var(--copy-bg)"/>
+          <text x="240" y="60" text-anchor="middle" font-size="16">строка 0: нули</text>
+          <rect x="60" y="40" width="30" height="200" fill="var(--copy-bg)"/>
+          <rect x="390" y="210" width="30" height="30" rx="5" fill="var(--take-bg)" stroke="var(--take)"/>
+          <text x="405" y="231" text-anchor="middle" fill="var(--take)" font-weight="600" font-size="17">A</text>
+          <text x="380" y="231" text-anchor="end" fill="var(--take)" font-size="16">ответ A<tspan font-size="12" dy="5">n,w</tspan></text>
+          <path d="M110 100 h100 v30 h-100 z" fill="var(--cur-bg)" stroke="var(--cur)"/>
+          <text x="160" y="120" text-anchor="middle" fill="var(--cur)" font-size="15">строка k−1</text>
+          <path d="M110 140 h100 v30 h-100 z" fill="none" stroke="var(--cur)" stroke-dasharray="4 3"/>
+          <text x="160" y="160" text-anchor="middle" fill="var(--cur)" font-size="15">строка k</text>
+          <path d="M160 131 v6" stroke="var(--cur)" stroke-width="2" marker-end="url(#arr)"/>
+          <defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--cur)"/></marker></defs>
+        </svg></div>
+        <p class="muted" style="font-size:19px">Строка k зависит только от строки k−1. Заполняем сверху вниз, слева направо.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Алгоритм · идея</span><span class="num"></span></div>
+  <div class="notes">Теперь сам алгоритм. Введём подзадачу (k, s): используем только первые k предметов, а вместимость рюкзака равна s. ⏵ Величина A с индексами k, s это максимальный вес укладки из первых k предметов, не превышающий s. Определение нужно проговорить точно. Не «можно ли набрать ровно s», а «какой наибольший вес, не больший s, достижим». ⏵ Тогда ответ на исходную задачу лежит в ячейке A n, w. Если там стоит ровно w, укладка существует. ⏵ Каждый новый предмет означает одно управляющее решение: взять его, освободив место за счёт старых предметов, или оставить прежнюю укладку. ⏵ Здесь работает принцип оптимальности Беллмана. Если предмет взят, оставшееся место s минус a k должно быть заполнено оптимально, а это уже посчитано в предыдущей строке. Справа схема таблицы: n плюс 1 строка, w плюс 1 столбец. Нулевая строка и нулевой столбец нули. Строка k строится только по строке k минус 1. Ответ в правом нижнем углу.</div>
+</section>
+
+<!-- ================================================================ 7. ПРАВИЛО ПЕРЕХОДА -->
+<section class="slide" data-sec="2">
+  <h2>Правило перехода<small>три случая при добавлении предмета k с весом a<sub>k</sub> в ячейку (k, s)</small></h2>
+  <div class="formula">
+    A<sub>k,s</sub> = <span class="copy">A<sub>k−1,s</sub></span>, если a<sub>k</sub> &gt; s<br>
+    A<sub>k,s</sub> = max( <span class="copy">A<sub>k−1,s</sub></span> , <span class="take">A<sub>k−1, s−a<sub>k</sub></sub> + a<sub>k</sub></span> ), если a<sub>k</sub> ≤ s
+  </div>
+  <div class="cards" style="margin-top:6px">
+    <div class="card frag">
+      <h3><span class="k copy">1</span> Не влезает</h3>
+      <p>a<sub>k</sub> &gt; s: предмет не помещается даже в пустой рюкзак вместимости s.</p>
+      <p class="m" style="color:var(--copy)">A<sub>k,s</sub> ← A<sub>k−1,s</sub></p>
+    </div>
+    <div class="card frag">
+      <h3><span class="k copy">2</span> Влезает, но не помогает</h3>
+      <p>Взяли предмет, оптимально заполнили остаток s − a<sub>k</sub> — и получили не больше, чем было.</p>
+      <p class="m" style="color:var(--copy)">A<sub>k,s</sub> ← A<sub>k−1,s</sub></p>
+    </div>
+    <div class="card frag">
+      <h3><span class="k take">3</span> Влезает и улучшает</h3>
+      <p>Предмет плюс оптимальное заполнение остатка дают больший вес.</p>
+      <p class="m" style="color:var(--take)">A<sub>k,s</sub> ← A<sub>k−1, s−a<sub>k</sub></sub> + a<sub>k</sub></p>
+    </div>
+  </div>
+  <p class="frag muted" style="font-size:21px">Каждая ячейка — за O(1) по двум ячейкам предыдущей строки. Цвета дальше везде: <span class="k copy">скопировали сверху</span>, <span class="k take">взяли предмет</span>.</p>
+  <div class="foot"><span>Алгоритм · правило перехода</span><span class="num"></span></div>
+  <div class="notes">Правило перехода. Если вес нового предмета больше s, ячейка копируется из предыдущей строки. Иначе берём максимум из двух вариантов: оставить старую укладку или взять предмет и добавить к нему оптимальное заполнение остатка. ⏵ Разберём три случая. Первый: предмет не влезает даже в пустой рюкзак вместимости s. Копируем сверху. ⏵ Второй: предмет влезает, но, взяв его и оптимально заполнив остаток, мы получаем не больше, чем было. Тоже копируем. Первые два случая обычно объединяют, я их разделяю, чтобы было видно, что «влезает» ещё не значит «берём». ⏵ Третий: предмет улучшает результат. Берём его. ⏵ Каждая ячейка вычисляется за константное время по двум ячейкам предыдущей строки. Отсюда линейная по n на w оценка. Цветовая кодировка дальше сохраняется: зелёный значит скопировали сверху, оранжевый значит взяли предмет.</div>
+</section>
+
+<!-- ================================================================ 8. ПСЕВДОКОД -->
+<section class="slide" data-sec="2">
+  <h2>Псевдокод<small>заполнение таблицы и обратный ход<span class="app-ref">; реализация на C++ — в приложении</span></small></h2>
+  <div class="row">
+    <div class="col">
+      <div class="code sm"><b>ЗАПОЛНИТЬ</b>(a[1..n], w):
+  <span class="kw">для</span> s = 0..w: A[0][s] ← 0     <span class="c">// нет предметов</span>
+  <span class="kw">для</span> k = 1..n:
+    <span class="kw">для</span> s = 0..w:
+      <span class="kw">если</span> a[k] &gt; s:                <span class="c">// случай 1</span>
+        A[k][s] ← <span class="copy">A[k−1][s]</span>
+      <span class="kw">иначе</span>:                        <span class="c">// случаи 2, 3</span>
+        A[k][s] ← max(<span class="copy">A[k−1][s]</span>,
+                 <span class="take">A[k−1][s−a[k]] + a[k]</span>)
+  <span class="kw">вернуть</span> A[n][w] = w          <span class="c">// есть ли укладка</span></div>
+    </div>
+    <div class="col" style="flex:0 0 500px">
+      <div class="code sm frag"><b>ВОССТАНОВИТЬ</b>(a, A, w):
+  s ← w
+  <span class="kw">для</span> k = n..1:
+    <span class="kw">если</span> A[k][s] = A[k−1][s]:
+      x[k] ← 0             <span class="c">// несуществен</span>
+    <span class="kw">иначе</span>:
+      x[k] ← 1; s ← s − a[k]  <span class="c">// взят</span>
+  <span class="kw">вернуть</span> x</div>
+      <div class="panel frag" style="margin-top:16px;font-size:20px">
+        Два вложенных цикла — <span class="m">(n+1)(w+1)</span> ячеек по O(1). Обратный ход — <span class="m">n</span> шагов. Память — вся таблица: без неё укладку не восстановить.
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Алгоритм · псевдокод</span><span class="num"></span></div>
+  <div class="notes">Вот весь алгоритм в псевдокоде. Заполнение состоит из двух вложенных циклов, по предметам и по вместимостям. Внутри то самое правило перехода. Результат получаем сравнением правой нижней ячейки с w. ⏵ Обратный ход идёт от последнего предмета к первому. Если значение в столбце s не изменилось при добавлении предмета, предмет несуществен. Иначе он взят, и мы уменьшаем s на его вес. ⏵ Два цикла дают n плюс один на w плюс один ячеек по константе, обратный ход занимает n шагов. И заметьте: для обратного хода нужна вся таблица. Это и определит сложность по памяти.</div>
+</section>
+
+<!-- ================================================================ 9. ЗАПОЛНЯЕМ -->
+<section class="slide" data-sec="2">
+  <h2>Заполняем таблицу<small>модельный пример: a = (1, 4, 5, 6, 9), w = 10 — по одной строке за шаг</small></h2>
+  <div class="row">
+    <div class="col" style="flex:0 0 340px">
+      <div class="items sm" id="fillItems" style="gap:8px">
+        <div class="item"><div class="box">1</div><div class="lab">a<sub>1</sub></div></div>
+        <div class="item"><div class="box">4</div><div class="lab">a<sub>2</sub></div></div>
+        <div class="item"><div class="box">5</div><div class="lab">a<sub>3</sub></div></div>
+        <div class="item"><div class="box">6</div><div class="lab">a<sub>4</sub></div></div>
+        <div class="item"><div class="box">9</div><div class="lab">a<sub>5</sub></div></div>
+      </div>
+      <div class="steps" style="margin-top:18px;font-size:18px;gap:8px">
+        <div class="st frag" data-items="1" data-row="1">k = 1, a<sub>1</sub> = 1: любая вместимость ≥ 1 даёт вес 1</div>
+        <div class="st frag" data-items="2" data-row="2">k = 2, a<sub>2</sub> = 4: при s = 4 берём 4, при s = 5 — 4 + 1</div>
+        <div class="st frag" data-items="3" data-row="3">k = 3, a<sub>3</sub> = 5: при s = 9 — 4 + 5, при s = 10 — 5 + 5 = 10</div>
+        <div class="st frag" data-items="4" data-row="4">k = 4, a<sub>4</sub> = 6: улучшает только s = 7 и s = 8</div>
+        <div class="st frag" data-items="5" data-row="5">k = 5, a<sub>5</sub> = 9: ничего не улучшает — строка копируется</div>
+      </div>
+    </div>
+    <div class="col">
+      <table class="dp" id="t1"></table>
+      <p class="muted" style="font-size:17px;margin-top:5px">Нулевая строка и столбец — тривиальные подзадачи, всегда нули. Например, <span class="m">A<sub>4,7</sub> = max(A<sub>3,7</sub>, A<sub>3,1</sub> + 6) = max(6, 7) = 7</span>.</p>
+      <div class="panel tight frag" style="margin-top:6px;font-size:19px" data-table="t1" data-cells="5-10" data-cls="cur"><b>Ответ в углу: <span class="m">A<sub>5,10</sub> = 10 = w</span></b> — укладка существует. Какие предметы взяты, таблица не говорит: нужен обратный ход.</div>
+    </div>
+  </div>
+  <div class="foot"><span>Алгоритм · модельный пример, заполнение</span><span class="num"></span></div>
+  <div class="notes">Заполняем таблицу для модельного примера. Нулевая строка и нулевой столбец это тривиальные подзадачи, там нули. ⏵ Первый предмет весом 1. Любая вместимость от единицы даёт вес 1. ⏵ Второй предмет весом 4. При s равном 4 берём его: максимум из 1 и 0 плюс 4, получается четыре. При s равном 5 берём максимум из 1 и A один-один плюс 4, то есть 5. ⏵ Третий предмет весом 5. При s равном 9 получаем 4 плюс 5, при s равном 10 получаем A два-пять плюс 5, то есть 10. Целевой вес достигнут уже на трёх предметах. ⏵ Четвёртый предмет весом 6 улучшает только столбцы 7 и 8. Например, при s равном 7 это A три-один плюс 6, семь. ⏵ Пятый предмет весом 9 ничего не улучшает. При s равном 10 максимум из 10 и 1 плюс 9 по-прежнему 10. Строка копируется целиком. ⏵ Ответ в правом нижнем углу: A пять-десять равно 10, равно w, укладка существует. Если бы там стояло меньше 10, ответ был бы «укладки нет», и это тоже точный ответ. Но какие именно предметы взяты, таблица не говорит, она хранит только веса. Нужен обратный ход.</div>
+</section>
+
+<!-- ================================================================ 13. ОБРАТНЫЙ ХОД ПРИМЕР -->
+<section class="slide" data-sec="2">
+  <h2>Обратный ход: восстановление укладки<small>от (n, w) к (0, 0): если <span class="m">A<sub>k,s</sub> = A<sub>k−1,s</sub></span> — предмет несуществен, x<sub>k</sub> = 0; иначе x<sub>k</sub> = 1 и s ← s − a<sub>k</sub></small></h2>
+  <div class="row">
+    <div class="col">
+      <table class="dp" id="t4"></table>
+      <div class="items" id="btItems" style="margin-top:18px">
+        <div class="item"><div class="box">1</div><div class="lab">x<sub>1</sub></div></div>
+        <div class="item"><div class="box">4</div><div class="lab">x<sub>2</sub></div></div>
+        <div class="item"><div class="box">5</div><div class="lab">x<sub>3</sub></div></div>
+        <div class="item"><div class="box">6</div><div class="lab">x<sub>4</sub></div></div>
+        <div class="item"><div class="box">9</div><div class="lab">x<sub>5</sub></div></div>
+      </div>
+    </div>
+    <div class="col" style="flex:0 0 500px">
+      <div class="steps" style="font-size:19px">
+        <div class="st copy frag" data-table="t4" data-cells="5-10 4-10" data-cls="copy" data-skip="5">k=5, s=10: <span class="m">A<sub>5,10</sub> = A<sub>4,10</sub> = 10</span> → x<sub>5</sub> = 0</div>
+        <div class="st copy frag" data-table="t4" data-cells="4-10 3-10" data-cls="copy" data-skip="4">k=4, s=10: <span class="m">A<sub>4,10</sub> = A<sub>3,10</sub> = 10</span> → x<sub>4</sub> = 0</div>
+        <div class="st take frag" data-table="t4" data-cells="3-10 2-10" data-cls="take" data-take="3">k=3, s=10: <span class="m">A<sub>3,10</sub> = 10 ≠ A<sub>2,10</sub> = 5</span> → x<sub>3</sub> = 1, s = 10 − 5 = 5</div>
+        <div class="st take frag" data-table="t4" data-cells="2-5 1-5" data-cls="take" data-take="2">k=2, s=5: <span class="m">A<sub>2,5</sub> = 5 ≠ A<sub>1,5</sub> = 1</span> → x<sub>2</sub> = 1, s = 5 − 4 = 1</div>
+        <div class="st take frag" data-table="t4" data-cells="1-1 0-1" data-cls="take" data-take="1">k=1, s=1: <span class="m">A<sub>1,1</sub> = 1 ≠ A<sub>0,1</sub> = 0</span> → x<sub>1</sub> = 1, s = 0</div>
+        <div class="st cur frag">Укладка <span class="m" style="color:var(--cur)">x = (1, 1, 1, 0, 0)</span>: 1 + 4 + 5 = 10. Другие решения (4 + 6, 1 + 9) алгоритм не выдаёт</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Алгоритм · обратный ход</span><span class="num"></span></div>
+  <div class="notes">Обратный ход идёт от последнего предмета к первому. Правило в подзаголовке: если значение в столбце s не изменилось при добавлении предмета, предмет несуществен, та же сумма достижима без него. Если изменилось, предмет в укладке, и остаток веса ищем в подзадаче с меньшим s. Ровно n шагов, на каждом одно сравнение. ⏵ k равно 5, s равно 10. A пять-десять равно A четыре-десять, значит, пятый предмет несуществен, x пять равно нулю. ⏵ k равно 4: снова равенство, четвёртый предмет пропускаем. ⏵ k равно 3. A три-десять равно 10, а A два-десять равно 5. Значение изменилось, третий предмет взят, s становится 10 минус 5, то есть 5. Заметьте, что после исключения предмета остаётся подзадача с предметами 1 и 4 и весом 5, и значения в таблице для неё те же самые. Пересчитывать ничего не нужно. ⏵ k равно 2, s равно 5. Пять не равно единице, второй предмет взят, s равно 1. ⏵ k равно 1, s равно 1. Единица не равна нулю, первый предмет взят, s равно нулю. ⏵ Укладка: один, один, один, ноль, ноль. 1 плюс 4 плюс 5 равно 10. Другие решения, 4 плюс 6 или 1 плюс 9, алгоритм не выдаёт. Он детерминирован и предпочитает предметы с младшими номерами. Оговорка: «несуществен» не значит, что предмет не может входить в какое-то другое решение.</div>
+</section>
+
+<!-- ================================================================ 14. СВОЙ ПРИМЕР -->
+<section class="slide" data-sec="2">
+  <h2>Оригинальный пример: когда укладки нет<small>a = (3, 5, 7, 11), w = 13 — D = 4 / log<sub>2</sub> 11 ≈ 1,16</small></h2>
+  <div class="row">
+    <div class="col">
+      <table class="dp" id="t5"></table>
+      <p class="muted" style="font-size:19px;margin-top:12px">Достижимые веса: 0, 3, 5, 7, 8, 10, 11, 12, 14, 15, 16, 18, … — 13 среди них нет</p>
+    </div>
+    <div class="col" style="flex:0 0 390px">
+      <div class="panel mid frag" data-table="t5" data-cells="4-13" data-cls="bad">
+        <h3>Ответ: укладки нет</h3>
+        <p><span class="m">A<sub>4,13</sub> = 12 &lt; 13</span>. Лучшее, что можно набрать, не превысив 13, — это 12 (5 + 7).</p>
+      </div>
+      <div class="panel mid frag" style="margin-top:12px">
+        <h3>Точный отрицательный ответ</h3>
+        <p>Перебор дал бы то же за 16 укладок, ДП — за 5 × 14 = 70 ячеек: здесь дороже, но с ростом n соотношение переворачивается.</p>
+      </div>
+      <div class="panel mid frag" style="margin-top:12px" data-table="t5" data-cells="3-15" data-cls="take">
+        <h3>А если w = 15?</h3>
+        <p><span class="m">A<sub>3,15</sub> = 15</span> — укладка (1, 1, 1, 0) уже на трёх предметах.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Алгоритм · оригинальный пример</span><span class="num"></span></div>
+  <div class="notes">Свой пример, чтобы показать случай, которого нет в модельном примере: укладки не существует. Веса 3, 5, 7, 11, целевой вес 13, плотность около 1,16. Таблица построена тем же правилом, я взял её из своей программы. ⏵ В правом нижнем углу A четыре-тринадцать равно 12, а не 13. Лучшее, что можно набрать, не превысив 13, это двенадцать, 5 плюс 7. Значит, укладки с весом 13 нет, и это точный отрицательный ответ. ⏵ Полный перебор дал бы то же самое, просмотрев все 16 укладок. ДП просмотрело 70 ячеек. На таком крошечном примере это дороже, но с ростом n соотношение переворачивается, и мы увидим это в эксперименте. ⏵ Для сравнения: если бы целевой вес был 15, ответ появился бы уже в третьей строке, укладка 3 плюс 5 плюс 7.</div>
+</section>
+
+<!-- ================================================================ 15. СЛОЖНОСТЬ -->
+<section class="slide" data-sec="3">
+  <h2>Сложность последовательной реализации<small>время линейно по n и w, память — тоже, и в этом проблема</small></h2>
+  <div class="row">
+    <div class="col" style="flex:0 0 520px">
+      <div class="panel mid">
+        <h3>Время</h3>
+        <p><span class="m">Θ(n·w)</span> на заполнение + <span class="m">O(n)</span> на обратный ход</p>
+      </div>
+      <div class="panel mid frag" style="margin-top:10px">
+        <h3>Память</h3>
+        <p><span class="m">(n+1)(w+1)</span> ячеек. Худший случай w ≈ n·a<sub>max</sub>, а <span class="m">a<sub>max</sub> = 2<sup>n/D</sup></span>, поэтому</p>
+        <p class="m" style="font-size:27px;margin-top:6px;color:var(--cur)">M ≈ n<sup>2</sup> · 2<sup>n/D</sup></p>
+      </div>
+      <div class="panel mid frag" style="margin-top:10px">
+        <h3>Пример: n = 50, байт на ячейку</h3>
+        <p style="font-size:20px">D = 1: <span class="m">2500 · 2<sup>50</sup></span> ячеек ≈ <b>2,6·10<sup>9</sup> ГБ</b></p>
+        <p style="font-size:20px">D = 100: <span class="m">2500 · 2<sup>0,5</sup></span> ≈ <b>3,6 КБ</b></p>
+      </div>
+      <p class="frag muted" style="font-size:18px;margin-top:8px">Сложность <b>псевдополиномиальная</b>: линейна по <i>значению</i> w, но экспоненциальна по его <i>длине</i> в битах. NP-полнота не нарушена.</p>
+    </div>
+    <div class="col">
+      <div class="panel tight">
+        <div class="chart" id="memChart"></div>
+        <p class="muted" style="font-size:17px;margin-top:6px">Память таблицы в битах (64 бита на ячейку), худший случай, плотности D = 1 … 8.<span class="app-ref"> Таблица значений — в приложении.</span></p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Последовательная реализация · сложность</span><span class="num"></span></div>
+  <div class="notes">Переходим к анализу. Время: тэта от n на w на заполнение плюс n на обратный ход. Линейно и по числу предметов, и по целевому весу. ⏵ Память: вся таблица, n плюс один на w плюс один ячеек. В худшем случае w близок к сумме всех весов, то есть примерно n на a max, а a max через плотность выражается как два в степени n делить на D. Получаем оценку: память порядка n квадрат на два в степени n делить на D. ⏵ Пример для n равного 50 при одном байте на ячейку. При плотности 1 это 2,6 миллиарда гигабайт, что недостижимо. При плотности 100 это три с половиной килобайта. ⏵ Здесь нужно слово «псевдополиномиальный». Сложность линейна по значению w, но экспоненциальна по его длине в битах. Поэтому NP-полнота не нарушена. График справа показывает рост памяти в битах по n для плотностей от 1 до 8, красная линия соответствует 64 гигабайтам. При плотности 1 предел около 30 предметов, при плотности 8 около 200. Основной тезис такой: не время, а память ограничивает ДП.</div>
+</section>
+
+<!-- ================================================================ 16. ЭКСПЕРИМЕНТ 1 -->
+<section class="slide" data-sec="3">
+  <h2>Эксперимент 1: ДП против полного перебора<small>собственная реализация на C++: суммы весов ≤ 18 бит, w ≈ 100 % от суммы</small></h2>
+  <div class="row">
+    <div class="col">
+      <div class="panel tight">
+        <div class="chart" id="expChart"></div>
+      </div>
+    </div>
+    <div class="col" style="flex:0 0 430px">
+      <ul class="plain" style="font-size:21px">
+        <li>Перебор — код Грея, без досрочного выхода: <b>×2 на каждый предмет</b>. n = 34 → 15 с, n = 50 → ≈ 30 лет</li>
+        <li class="frag">ДП — от 0,2 до 1,0 мс на всём диапазоне: время зависит от w, а не от n</li>
+        <li class="frag">Битовый вариант (1 бит на ячейку, 64 ячейки в слове) — ещё в 15–20 раз быстрее</li>
+        <li class="frag">Точка пересечения: n ≈ 18 (на Core 2 Quad 2016 года — n ≈ 22)</li>
+        <li class="frag">По w — линейно: при n = 32 рост w с 2<sup>16</sup> до 2<sup>23</sup> даёт 0,3 → 27 мс, ×2 на бит</li>
+      </ul>
+      <p class="frag muted" style="font-size:18px;margin-top:10px">Apple M1 Pro, clang 17, −O2, минимум из 5 запусков.<span class="app-ref"> Таблицы — в приложении.</span></p>
+    </div>
+  </div>
+  <div class="foot"><span>Последовательная реализация · эксперимент 1</span><span class="num"></span></div>
+  <div class="notes">Я реализовал алгоритм на C++ и взял условия эксперимента из базовой работы: суммы весов не превышают 18 бит, целевой вес около ста процентов от суммы. Это худший случай для ДП. Веса случайные, равномерные. По оси y логарифмическая шкала времени. Красная линия это полный перебор. Я сделал его быстрым: обход укладок в порядке кода Грея, сумма меняется на один вес за шаг, без досрочного выхода. Он растёт ровно вдвое на каждый предмет. 34 предмета занимают 15 секунд, 50 предметов заняли бы порядка тридцати лет. ⏵ Синяя линия это ДП: от 0,2 до 1 миллисекунды на всём диапазоне. Время зависит от w, а не от n. ⏵ Зелёная линия это битовый вариант: один бит на ячейку, «достижим ли вес s», переход через сдвиг и ИЛИ над машинным словом, 64 ячейки за операцию. Ещё в 15–20 раз быстрее. ⏵ Точка пересечения у меня около 18 предметов, на Core 2 Quad 2016 года около 22. Оптимизированный перебор сдвигает точку, но не меняет экспоненту. ⏵ Отдельно проверил зависимость от w. При фиксированных 32 предметах каждый лишний бит длины w удваивает время: 0,3 миллисекунды при 16 битах, 27 при 23. Оценка тэта от n на w подтверждается, а таблица при этом уже занимает гигабайт. ⏵ Железо и компилятор указаны здесь, все числа есть в таблицах.</div>
+</section>
+
+<!-- ================================================================ 18. СРАВНЕНИЕ -->
+<section class="slide" data-sec="3">
+  <h2>Сравнение с перебором и обходом дерева<small>по оценкам и собственным замерам</small></h2>
+  <table class="cmp" style="font-size:20px">
+    <tr><th style="width:190px"></th><th>Полный перебор</th><th>Обход дерева</th><th>ДП</th></tr>
+    <tr><td>Что перебираем</td><td>укладки</td><td>укладки</td><td><b>веса</b></td></tr>
+    <tr><td>Время</td><td class="m">2<sup>n</sup></td><td class="m">≤ 2<sup>n</sup>, с отсечением</td><td class="m">n · w</td></tr>
+    <tr><td>Память</td><td class="m">O(n)</td><td class="m">O(n)</td><td class="m">n · w ≈ n<sup>2</sup>·2<sup>n/D</sup></td></tr>
+    <tr><td>Зависимость от D</td><td>нет</td><td>слабая</td><td><b>сильная</b>: чем плотнее, тем лучше</td></tr>
+    <tr><td>Стоимость шага</td><td>разная — нагрузка неравномерна</td><td>разная — нужна линеаризация и балансировка</td><td><b>одинаковая</b>: O(1) на ячейку</td></tr>
+    <tr><td>Где выигрывает</td><td>D ≈ 1, малые n</td><td>D ≈ 1, средние n</td><td>D ≫ 1, любые n</td></tr>
+  </table>
+  <p class="frag callout" style="margin-top:0;font-size:21px">ДП обгоняет перебор с n ≈ 18–22. Но веса в таких экспериментах короткие, то есть плотность высокая. При D → 1 таблица не поместится в память задолго до того, как перебор станет слишком медленным.</p>
+  <div class="foot"><span>Последовательная реализация · сравнение методов</span><span class="num"></span></div>
+  <div class="notes">Сведём три метода в таблицу. Перебор и дерево перебирают укладки, ДП перебирает веса. Время: два в степени n, меньше двух в степени n с отсечением, и n на w. Память: у переборных методов линейная, у ДП вся таблица, то есть n квадрат на два в степени n делить на D. От плотности перебор не зависит, дерево зависит слабо, ДП сильно, и чем плотнее вектор, тем ему лучше. Строка «стоимость шага» важна для параллельной реализации. У перебора проверка укладки стоит по-разному, отсюда неравномерная нагрузка из работы 2015 года. У дерева нужна линеаризация и балансировка. У ДП каждая ячейка стоит одинаково. ⏵ Вывод: ДП обгоняет перебор с 18–22 предметов. Но условия надо оговорить: веса короткие, плотность около двух. При плотности, близкой к единице, таблица не поместится в память задолго до того, как перебор станет слишком медленным. Перебор и дерево подходят для низкой плотности, ДП для высокой.</div>
+</section>
+
+<!-- ================================================================ 19. ПАРАЛЛЕЛЬНАЯ СХЕМА -->
+<section class="slide" data-sec="4">
+  <h2>Параллельная реализация: строка за строкой<small>ячейки одной строки независимы — делим столбцы между p потоками, барьер после каждой строки</small></h2>
+  <div class="row">
+    <div class="col">
+      <div class="par" id="parDiag"></div>
+      <p class="muted" style="font-size:19px;margin-top:14px">Каждый поток читает только строку k−1 и пишет только свои столбцы строки k: гонок нет, синхронизация — n барьеров.</p>
+    </div>
+    <div class="col" style="flex:0 0 520px">
+      <div class="code sm"><b>ПАРАЛЛЕЛЬНО</b> <span class="kw">для</span> id = 0..p−1:
+  [lo, hi) ← столбцы потока id  <span class="c">// ≈ w/p</span>
+  <span class="kw">для</span> k = 1..n:
+    <span class="kw">для</span> s = lo..hi−1:
+      A[k][s] ← правило перехода <span class="c">// по k−1</span>
+    <span class="path">барьер()</span>          <span class="c">// строка k готова</span></div>
+      <div class="panel frag" style="margin-top:14px;font-size:20px">
+        <p>Время: <span class="m">Θ(n·w / p + n·log p)</span>. Нагрузка <b>равномерна по построению</b> — в отличие от перебора и обхода дерева, балансировать нечего.</p>
+        <p class="muted" style="margin-top:8px">Память та же: n·w. Параллелизм не лечит главную проблему метода.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Параллельная реализация · схема</span><span class="num"></span></div>
+  <div class="notes">Четвёртый раздел, параллельная реализация. Схема простая: все ячейки одной строки зависят только от предыдущей строки, значит, их можно считать одновременно. Делим столбцы между p потоками, каждый поток считает свой диапазон, после каждой строки ставим барьер. Пока строка k не готова целиком, к строке k плюс 1 переходить нельзя. На схеме четыре потока и три строки, пунктиром показаны барьеры. Гонок нет: каждый поток читает только строку k минус 1 и пишет только свои столбцы. Псевдокод справа повторяет мой код на std::thread и std::barrier. ⏵ Оценка: n на w делить на p плюс n барьеров по логарифм p. Важное отличие от перебора и дерева: нагрузка равномерна по построению, каждая ячейка стоит одинаково, балансировать нечего. Но память та же, n на w. Параллелизм ускоряет заполнение, но не решает главную проблему метода.</div>
+</section>
+
+<!-- ================================================================ 19b. ПАРАЛЛЕЛЬНОЕ ДП В ЛИТЕРАТУРЕ -->
+<section class="slide" data-sec="4">
+  <h2>Оценки параллельного ДП в литературе<small>что уже известно о распараллеливании ДП для задачи о рюкзаке</small></h2>
+  <table class="cmp" style="font-size:19px">
+    <tr><th style="width:250px">Работа</th><th>Что сделано</th><th style="width:330px">Оценка / результат</th></tr>
+    <tr><td>Классическая схема<br><span class="muted">PRAM, строка за строкой</span></td><td>ячейки строки считаются независимо, строки последовательно</td><td class="m">O(n·w/p) при p ≤ w</td></tr>
+    <tr><td>Boyer, El Baz, Elkihel, 2012</td><td>плотное ДП для рюкзака на GPU (CUDA), сжатие таблицы для экономии памяти и обмена CPU–GPU</td><td>ускорение <b>≈ 26×</b> против Xeon 3 ГГц на GTX 260</td></tr>
+  </table>
+  <p class="frag callout" style="margin-top:2px;font-size:20px">Вывод литературы совпадает с моим замером: выигрыш даёт не число ядер, а сокращение трафика памяти (сжатие таблицы) и высокая пропускная способность GPU. Параллельное ДП экономит время, но не память.</p>
+  <div class="foot"><span>Параллельная реализация · оценки в литературе</span><span class="num"></span></div>
+  <div class="notes">Прежде чем показать свой замер, скажу, что уже известно о параллельном ДП для рюкзака. Классическая схема та же, что на предыдущем слайде: в модели PRAM время n на w делить на p, пока процессоров не больше, чем столбцов. Бойер, Эль Баз и Элькиэль в 2012 году реализовали плотное ДП для рюкзака на GPU и получили ускорение около 26 раз против процессора Xeon; отдельно они предложили сжатие таблицы, чтобы уменьшить память и обмен между процессором и видеокартой. ⏵ Вывод этой работы совпадает с тем, что я получу на следующем слайде: выигрыш даёт не число ядер, а сокращение трафика памяти и пропускная способность GPU. Параллельное ДП экономит время, но не память.</div>
+</section>
+
+<!-- ================================================================ 20. ЭКСПЕРИМЕНТ 3 -->
+<section class="slide" data-sec="4">
+  <h2>Эксперимент 2: ускорение на 8 ядрах<small>n = 64, w = 2<sup>21</sup>, таблица 545 МБ, std::thread + std::barrier; время только заполнения</small></h2>
+  <div class="row">
+    <div class="col" style="flex:0 0 560px">
+      <div class="panel tight">
+        <div class="chart" id="parChart"></div>
+      </div>
+    </div>
+    <div class="col">
+      <ul class="plain" style="font-size:21px">
+        <li>Ускорение упирается в <b>1,5×</b> уже на трёх потоках — при идеальных 8×</li>
+        <li class="frag">Причина не в барьерах (их всего 64), а в памяти: один поток уже качает ≈ 80 ГБ/с — 12 байт на ячейку, 6,7 млрд ячеек/с</li>
+        <li class="frag">ДП по таблице — задача, ограниченная <b>пропускной способностью памяти</b>, а не арифметикой</li>
+        <li class="frag">Что помогает: битовое представление (в 32 раза меньше трафика), блочная обработка нескольких строк в кэше, GPU с высокой пропускной способностью — строка таблицы как один запуск ядра</li>
+      </ul>
+      <p class="frag muted" style="font-size:18px;margin-top:12px">6 производительных + 2 эффективных ядра M1 Pro; минимум из 5 запусков.<span class="app-ref"> Таблица — в приложении.</span></p>
+    </div>
+  </div>
+  <div class="foot"><span>Параллельная реализация · эксперимент 2</span><span class="num"></span></div>
+  <div class="notes">Второй эксперимент: та же схема на восьми ядрах. 64 предмета, w равно два в двадцать первой, таблица 545 мегабайт выделена заранее, замеряется только заполнение. Столбцы показывают измеренное ускорение, пунктир идеальное. Ускорение упирается в полтора раза уже на трёх потоках. ⏵ Причина не в барьерах, их всего 64 на весь расчёт. Причина в памяти. Один поток уже прокачивает около 80 гигабайт в секунду: 12 байт на ячейку, почти 7 миллиардов ячеек в секунду. ⏵ Получается, что ДП по таблице ограничено пропускной способностью памяти, а не арифметикой. Ядра простаивают, ожидая данные. ⏵ Что с этим можно сделать. Битовое представление сокращает трафик в 32 раза, и там параллелизм снова заработает. Блочная обработка нескольких строк, пока они в кэше. И GPU, где пропускная способность памяти в несколько раз выше, а строка таблицы естественно ложится на один запуск ядра. Это направление для продолжения работы. ⏵ Условия замера указаны здесь.</div>
+</section>
+
+<!-- ================================================================ 22. ЧТО НОВОГО -->
+<section class="slide" data-sec="5">
+  <h2>Что нового в ДП для задачи о рюкзаке<small>оптимизации того же алгоритма и новые алгоритмы на основе ДП для Subset Sum</small></h2>
+  <div class="row">
+    <div class="col" style="flex:0 0 430px">
+      <h3 style="font-size:22px;color:var(--muted);margin-bottom:12px">Экономим память в том же алгоритме</h3>
+      <ul class="plain" style="font-size:20px">
+        <li>Строка k зависит только от строки k−1 → хватит <b>одной строки</b>, если идти по s справа налево: <span class="m">O(w)</span> памяти</li>
+        <li class="frag">Для вопроса «достижим ли вес ровно w» хватит 1 бита на s; переход <span class="m" style="color:var(--cur)">B ← B | (B ≪ a<sub>k</sub>)</span>, время <span class="m">O(n·w/64)</span></li>
+        <li class="frag muted">Для n = 50, D = 1 это по-прежнему 1,4·10<sup>6</sup> ГБ: меньше константа, не экспонента</li>
+      </ul>
+    </div>
+    <div class="col">
+      <h3 style="font-size:22px;color:var(--muted);margin-bottom:10px">Новые алгоритмы на основе ДП</h3>
+      <div class="tl" style="font-size:19px;gap:7px">
+        <div class="r"><span class="y">1957</span><span class="t"><b>Беллман</b> — <span class="m">O(n·w)</span> времени и памяти, таблица</span></div>
+        <div class="r frag"><span class="y">2017</span><span class="t"><b>Bringmann</b> — <span class="m">Õ(n + w)</span>: ДП по достижимым суммам через быстрое преобразование Фурье, рандомизированно</span></div>
+        <div class="r frag"><span class="y">2021</span><span class="t"><b>Jin, Vyas, Williams</b> — <span class="m">Õ(n·w)</span> времени при <span class="m">Õ(log(n·w))</span> памяти: таблица не хранится</span></div>
+      </div>
+      <p class="frag muted" style="font-size:18px;margin-top:10px">Барьер «память ∝ w» теоретически снят. Практических реализаций этих алгоритмов для криптоанализа нет.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Выводы · новые работы по ДП</span><span class="num"></span></div>
+  <div class="notes">Переходим к выводам. Сначала о том, что можно сделать с памятью, не меняя алгоритма. Строка зависит только от предыдущей, значит, хватит одной строки, если заполнять её справа налево. Память падает до w. ⏵ Если нас интересует только вопрос «достижим ли вес ровно w», хватит одного бита на столбец, и весь переход сводится к сдвигу и ИЛИ над машинным словом, 64 ячейки за операцию. Это тот битовый вариант, который был на графике эксперимента. ⏵ Но для 50 предметов при плотности 1 это по-прежнему миллион гигабайт. Уменьшается константа, экспонента остаётся. Теперь новые алгоритмы, которые построены на ДП. Отправная точка Беллман: n на w времени и памяти. ⏵ В 2017 году Брингман получил почти линейное время, n плюс w с точностью до логарифмов. Идея та же, что у таблицы ДП, но множество достижимых сумм строится через быстрое преобразование Фурье, рандомизированно. ⏵ В 2021 году Цзинь, Вьяс и Уильямс получили время Беллмана при логарифмической памяти. Таблица не хранится вовсе, значения вычисляются алгебраически, через многочлены по модулю. ⏵ Так что барьер «память пропорциональна w», который ограничивает табличное ДП, теоретически снят. Практических реализаций этих алгоритмов для криптоанализа нет, и это возможное продолжение работы.</div>
+</section>
+
+<!-- ================================================================ 23. ОСЬ ПЛОТНОСТИ -->
+<section class="slide" data-sec="5">
+  <h2>Где ДП уместно: плотность как ось<small>какой метод атаки выбирать в зависимости от D</small></h2>
+  <div class="axis">
+    <div class="line"></div>
+    <div class="tick" style="left:33%"></div><div class="lab" style="left:33%">D ≈ 0,94</div>
+    <div class="tick" style="left:52%"></div><div class="lab" style="left:52%">D ≈ 1</div>
+    <div class="tick" style="left:70%"></div><div class="lab" style="left:70%">D ≫ 1</div>
+    <div class="lab" style="left:0;transform:none">низкая плотность</div>
+    <div class="lab" style="right:0;left:auto;transform:none">высокая плотность</div>
+    <div class="zone lll frag" style="left:0;width:31%">Атаки низкой плотности: редукция решётки, LLL-решатель (тема 2.2)</div>
+    <div class="zone hard frag" style="left:34%;width:34%">Самая трудная зона: только экспоненциальные методы — полный перебор, обход дерева, встреча посередине 2<sup>n/2</sup></div>
+    <div class="zone dp frag" style="left:71%;width:29%">ДП: веса короткие, таблица помещается, время n·w</div>
+  </div>
+  <ul class="plain frag" style="font-size:22px;margin-top:4px">
+    <li>Развитие атак низкой плотности заставляет разработчиков повышать D — и двигать систему в зону, где работает ДП</li>
+    <li>Стойкость плотных рюкзачных систем нужно оценивать с учётом ДП, а не только переборных методов</li>
+  </ul>
+  <div class="foot"><span>Выводы · плотность и выбор метода</span><span class="num"></span></div>
+  <div class="notes">Основной вывод в виде картинки. Ось показывает плотность рюкзачного вектора. ⏵ Слева, при плотности ниже 0,94, работают атаки низкой плотности через редукцию решётки. Это следующая тема курса, LLL-решатель Мурина. ⏵ Посередине, около единицы, самая трудная зона. Там только экспоненциальные методы: полный перебор и обход дерева, о которых рассказывали на прошлой неделе, и встреча посередине за два в степени n пополам. ⏵ Справа, при высокой плотности, веса короткие, таблица помещается в память, и ДП решает задачу за n на w. ⏵ Отсюда два следствия. Развитие атак низкой плотности заставляет разработчиков повышать плотность, то есть двигать систему вправо, в зону ДП. Поэтому стойкость плотных рюкзачных систем надо оценивать с учётом ДП, а не только переборных методов.</div>
+</section>
+
+<!-- ================================================================ 24. ВЫВОДЫ -->
+<section class="slide" data-sec="5">
+  <h2>Выводы</h2>
+  <ul class="plain" style="font-size:22px;max-width:44em;gap:10px">
+    <li>ДП решает задачу о рюкзаке точно, перебирая веса, а не укладки: <span class="m">Θ(n·w)</span> времени, <span class="m">n</span> шагов на восстановление укладки</li>
+    <li class="frag">Цена — память <span class="m">n·w ≈ n<sup>2</sup>·2<sup>n/D</sup></span>: при D ≈ 1 метод неприменим уже при n = 50, при высокой D справляется с большими n</li>
+    <li class="frag">Собственный эксперимент подтверждает оценки: время линейно по w, ДП обгоняет перебор с n ≈ 18, на 8 ядрах ускоряется лишь в 1,5 раза — упирается в память</li>
+    <li class="frag">Параллелится тривиально и с равномерной нагрузкой, но это не снимает ограничение по памяти; биты снижают константу, не экспоненту</li>
+    <li class="frag">Новые алгоритмы на основе ДП: время <span class="m">Õ(n + w)</span> почти оптимально, память — до логарифмической; параллельное ДП на GPU даёт до 26× и подтверждает, что узкое место — память; практических реализаций для криптоанализа нет</li>
+    <li class="frag">Для криптографа: плотность определяет, какая атака опасна — низкая D уязвима к LLL, высокая — к ДП, середина самая трудная</li>
+  </ul>
+  <div class="foot"><span>Выводы</span><span class="num"></span></div>
+  <div class="notes">Итоги. ДП решает задачу о рюкзаке точно, перебирая веса, а не укладки: n на w времени и n шагов на восстановление. ⏵ Цена этого память, n квадрат на два в степени n делить на D. При плотности около единицы метод неприменим уже при 50 предметах, при высокой плотности справляется с большими n. ⏵ Мой эксперимент подтверждает оценки. Время линейно по w, ДП обгоняет перебор с 18 предметов, а на восьми ядрах ускоряется лишь в полтора раза, потому что упирается в память. ⏵ Параллелится метод тривиально и с равномерной нагрузкой, но параллелизм не снимает ограничение по памяти. Биты снижают константу, а не экспоненту. ⏵ Новые алгоритмы на основе ДП дают почти линейное время и логарифмическую память, параллельные реализации на GPU дают ускорение до 26 раз и подтверждают, что узкое место память. Практических реализаций для криптоанализа нет, и это перспектива. ⏵ Для криптографа главное: плотность вектора определяет, какая атака опасна. Низкая плотность уязвима к LLL, это следующая тема. Высокая плотность уязвима к ДП. Середина остаётся самой трудной. Спасибо, готов ответить на вопросы.</div>
+</section>
+
+<!-- ================================================================ 25. ИСТОЧНИКИ -->
+<section class="slide" data-sec="6">
+  <h2>Использованные источники</h2>
+  <ol style="margin:0;padding-left:34px;display:flex;flex-direction:column;gap:14px;font-size:21px;line-height:1.4;max-width:1080px">
+    <li>Куприяшин М.А., Борзунов Г.И. Исследование алгоритма точного решения задачи о рюкзаке методом динамического программирования // Вестник ПНИПУ. Электротехника, информационные технологии, системы управления. 2016. № 17. С. 121–130.</li>
+    <li>Борзунов Г.И., Куприяшин М.А. Распределение вычислительной нагрузки между процессорами при точном решении задачи о рюкзаке методом полного перебора // Безопасность информационных технологий. 2015. № 4. С. 51–56.</li>
+    <li>Куприяшин М.А., Борзунов Г.И. Алгоритм решения задачи о рюкзаке, основанный на обходе дерева вариантов укладки // Безопасность информационных технологий. 2014. № 2. С. 45–48.</li>
+    <li>Мурин Д.М. LLL-решатель // Математическое моделирование. 2012. Т. 24, № 12. С. 43–48.</li>
+    <li>Bringmann K. A near-linear pseudopolynomial time algorithm for Subset Sum // SODA 2017. P. 1073–1084.</li>
+    <li>Jin C., Vyas N., Williams R. Fast low-space algorithms for Subset Sum // SODA 2021. P. 1757–1776.</li>
+    <li>Boyer V., El Baz D., Elkihel M. Solving knapsack problems on GPU // Computers & Operations Research. 2012. Vol. 39, № 1. P. 42–47.</li>
+  </ol>
+  <div class="foot"><span>Источники</span><span class="num"></span></div>
+  <div class="notes">Источники. Базовая статья Куприяшина и Борзунова, первый пункт. Дальше их же работы о полном переборе с распределением нагрузки и об обходе дерева укладок: это темы 1.1 и 1.2, на которые я опирался в сравнении методов и в разделе о параллельной реализации. Мурин, атаки низкой плотности и LLL-решатель. Три работы по теме: Брингман, почти линейное время на основе ДП; Цзинь, Вьяс и Уильямс, ДП с логарифмической памятью; Бойер, Эль Баз и Элькиэль, параллельное ДП для рюкзака на GPU. Программа и данные экспериментов мои.</div>
+</section>
+
+<!-- ================================================================ 26. ПРИЛОЖЕНИЕ А -->
+<section class="slide" data-sec="7">
+  <h2>Приложение А. Таблицы к графикам<small>минимум из 3–5 запусков; полные CSV — src/seq.csv, src/wscale.csv, src/par.csv</small></h2>
+  <div class="row" style="gap:28px">
+    <div class="col">
+      <p class="muted" style="font-size:17px;margin-bottom:6px">Эксперимент 1: суммы ≤ 18 бит, w ≈ 100 %</p>
+      <table class="cmp data" id="tabExp1"></table>
+    </div>
+    <div class="col" style="flex:0 0 300px">
+      <p class="muted" style="font-size:17px;margin-bottom:6px">Зависимость от w: n = 32</p>
+      <table class="cmp data" id="tabExp2"></table>
+    </div>
+    <div class="col" style="flex:0 0 250px">
+      <p class="muted" style="font-size:17px;margin-bottom:6px">Эксперимент 2: n = 64, w = 2<sup>21</sup></p>
+      <table class="cmp data" id="tabExp3"></table>
+      <p class="muted" style="font-size:16px;margin-top:14px">График памяти: <span class="m">lg M = lg(64·n<sup>2</sup>) + (n/D)·lg 2</span>, бит; 64 ГБ = 5,5·10<sup>11</sup> бит.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Приложения · таблицы</span><span class="num"></span></div>
+  <div class="notes">Приложение А — таблицы, по которым построены графики. Слева эксперимент 1: время ДП, битового варианта и перебора по n. В центре зависимость от w при фиксированном n. Справа эксперимент 2: ускорение по числу потоков. Все замеры — минимум из пяти запусков, полные CSV лежат рядом с исходником.</div>
+</section>
+
+<!-- ================================================================ 27. ПРИЛОЖЕНИЕ Б -->
+<section class="slide" data-sec="7">
+  <h2>Приложение Б. Реализация и условия эксперимента<small>src/knapsack_dp.cpp — 240 строк C++20; ключевые функции</small></h2>
+  <div class="row">
+    <div class="col">
+      <div class="code xs"><span class="c">// заполнение: строка k по строке k−1, случаи 1 и 2/3</span>
+<span class="kw">for</span> (k = 1; k &lt;= n; ++k) {
+  ak = a[k−1]; prev = &amp;A[k−1][0]; cur = &amp;A[k][0];
+  <span class="kw">for</span> (s = 0; s &lt; ak; ++s) cur[s] = prev[s];
+  <span class="kw">for</span> (; s &lt;= w; ++s)
+    cur[s] = max(prev[s], prev[s−ak] + ak);
+}
+<span class="c">// биты: B |= B &lt;&lt; a_k по 64-битным словам</span>
+<span class="c">// перебор: код Грея, sum ± a[ctz(g)]</span>
+<span class="c">// параллельно: p потоков, std::barrier</span></div>
+    </div>
+    <div class="col" style="flex:0 0 520px">
+      <table class="cmp compact" style="font-size:17px">
+        <tr><td>Процессор</td><td>Apple M1 Pro: 6 производительных + 2 эффективных ядра</td></tr>
+        <tr><td>Память</td><td>16 ГБ LPDDR5, общая для всех ядер</td></tr>
+        <tr><td>ОС</td><td>macOS 26.5.1 (Darwin 25.5.0)</td></tr>
+        <tr><td>Компилятор</td><td>Apple clang 17.0.0, <span class="m">-O2 -std=c++20 -pthread</span></td></tr>
+        <tr><td>Библиотеки</td><td>только стандартная: &lt;thread&gt;, &lt;barrier&gt;, &lt;chrono&gt;, &lt;random&gt;</td></tr>
+        <tr><td>Данные</td><td>веса равномерные, <span class="m">a<sub>i</sub> &lt; 2<sup>b</sup>/n</span>; mt19937_64, seed 20260919</td></tr>
+        <tr><td>Замер</td><td>steady_clock, минимум из 5 запусков (3 — для зависимости от w)</td></tr>
+        <tr><td>Проверка</td><td>результаты ДП, битов и перебора сверяются на каждом экземпляре</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="foot"><span>Приложения · реализация</span><span class="num"></span></div>
+  <div class="notes">Приложение Б — реализация и условия. Слева ключевой фрагмент: заполнение строки по предыдущей, отдельно случай «не влезает» и случаи «максимум». Битовый вариант, перебор кодом Грея и параллельная версия — в том же файле. Справа условия: Apple M1 Pro с шестью производительными и двумя эффективными ядрами, 16 гигабайт общей памяти, macOS 26.5, Apple clang 17 с оптимизацией O2 и стандартом C++20, только стандартная библиотека. Веса равномерные, генератор с фиксированным зерном, так что эксперимент воспроизводим. На каждом экземпляре результаты трёх методов сверяются между собой.</div>
+</section>
+
+</div><!-- /stage -->
+
+<script>
+(function(){
+'use strict';
+/* ?theme=light|dark — принудительная тема (для печати); ?noappendix — убрать слайды приложений (нумерация пересчитается) */
+{const q=new URLSearchParams(location.search); const th=q.get('theme'); if(th==='light'||th==='dark'){document.documentElement.dataset.theme=th; try{localStorage.setItem('deck-theme',th);}catch(e){}} if(q.has('noappendix')) document.querySelectorAll('.slide[data-sec="7"], .app-ref').forEach(el=>el.remove());}
+/* ====================================================================
+   данные
+   ==================================================================== */
+const A = [1,4,5,6,9], W = 10;
+function dpTable(items, w){
+  const T=[]; for(let k=0;k<=items.length;k++){T[k]=[];for(let s=0;s<=w;s++){
+    if(k===0){T[k][s]=0;continue;}
+    const a=items[k-1]; let v=T[k-1][s];
+    if(a<=s) v=Math.max(v,T[k-1][s-a]+a);
+    T[k][s]=v;}}
+  return T;
+}
+const T = dpTable(A, W);
+const A2 = [3,5,7,11], W2 = 13, T2 = dpTable(A2, W2);
+
+/* результаты экспериментов (src/*.csv) */
+const EXP1 = [ // n, dp_fill_s, bitset_s, brute_s (w ≈ 100 %)
+  [10,.000190,.000014,.000001],[12,.000252,.000018,.000004],[14,.000213,.000017,.000015],[16,.000346,.000027,.000059],
+  [18,.000425,.000031,.000238],[20,.000412,.000030,.000943],[22,.000377,.000029,.004046],[24,.000401,.000030,.016213],
+  [26,.000525,.000039,.063532],[28,.000827,.000048,.250313],[30,.000458,.000036,.962361],[32,.001007,.000058,3.793109],
+  [34,.000724,.000047,15.227721],[36,.000831,.000049,null]];
+const EXP2 = [ // log2 w, dp_fill_s, bitset_s (n = 32)
+  [16,.000333,.000029],[17,.000375,.000031],[18,.001751,.000142],[19,.002431,.000188],[20,.004340,.000237],[21,.006799,.000376],[22,.012691,.000709],[23,.027404,.001447]];
+const EXP3 = [ // p, fill_s, speedup
+  [1,.0199,1.00],[2,.0147,1.35],[3,.0128,1.56],[4,.0135,1.48],[6,.0132,1.50],[8,.0128,1.55]];
+
+/* ====================================================================
+   таблицы ДП
+   ==================================================================== */
+function buildTable(id, items, w, Tb, opts){
+  opts=opts||{}; const el=document.getElementById(id); if(!el) return;
+  const rows=opts.rows||[...Array(items.length+1).keys()];
+  let h='<tr><th class="k">k \\ s</th>'; for(let s=0;s<=w;s++) h+='<th>'+s+'</th>'; h+='</tr>';
+  rows.forEach(k=>{
+    const fragRow = opts.fragRows && k>0;
+    h+='<tr data-k="'+k+'"'+(fragRow?' class="rowfrag"':'')+'><th class="k">'+k+(k>0?' <span style="opacity:.6">(a='+items[k-1]+')</span>':'')+'</th>';
+    for(let s=0;s<=w;s++){
+      const v=Tb[k][s]; let cls=v===0?'zero':'';
+      if(opts.colorFill && k>0){ if(v!==Tb[k-1][s]) cls+=' take'; }
+      h+='<td id="'+id+'-'+k+'-'+s+'" class="'+cls.trim()+'" style="--i:'+s+'">'+v+'</td>';
+    }
+    h+='</tr>';
+  });
+  el.innerHTML=h;
+}
+buildTable('t1',A,W,T,{fragRows:true,colorFill:true});
+buildTable('t4',A,W,T);
+buildTable('t5',A2,15,dpTable(A2,15),{colorFill:true});
+document.getElementById('t5').classList.add('xs');
+
+/* ====================================================================
+   параллельная диаграмма
+   ==================================================================== */
+(function(){
+  const host=document.getElementById('parDiag'); if(!host) return;
+  const rng=['[0, w/4)','[w/4, w/2)','[w/2, 3w/4)','[3w/4, w]'];
+  let h='<div class="rl">потоки</div><div class="strip">'+[0,1,2,3].map(p=>'<div class="seg p'+p+'">поток '+p+'</div>').join('')+'</div>';
+  h+='<div class="rl">столбцы s</div><div class="strip">'+[0,1,2,3].map(p=>'<div class="seg" style="height:30px;font-size:15px">'+rng[p]+'</div>').join('')+'</div>';
+  for(let k=1;k<=3;k++){
+    h+='<div class="rl">строка '+k+'</div><div class="strip">'+[0,1,2,3].map(p=>'<div class="seg p'+p+'">A['+k+'][s]</div>').join('')+'</div>';
+    h+='<div class="barrier"><span>барьер '+k+'</span></div>';
+  }
+  h+='<div class="rl">…</div><div class="muted" style="font-family:var(--sans);font-size:18px">и так n раз, до строки n</div>';
+  host.innerHTML=h;
+})();
+
+/* ====================================================================
+   графики (svg с viewBox, масштабируются под контейнер)
+   ==================================================================== */
+const fmt=x=>String(x).replace('.',',');
+function memChart(){
+  const host=document.getElementById('memChart'); if(!host) return;
+  const Wd=600,H=340,L=72,R=54,Tp=16,Bt=44;
+  const x=n=>L+(n/200)*(Wd-L-R), y=lg=>Tp+(1-(lg-3)/(18-3))*(H-Tp-Bt);
+  let s='<svg viewBox="0 0 '+Wd+' '+H+'">';
+  const ticks=[[3,'1 кбит'],[6,'1 Мбит'],[9,'1 Гбит'],[12,'1 Тбит'],[15,'1 Пбит'],[18,'1 Эбит']];
+  ticks.forEach(t=>{s+='<line class="grid" x1="'+L+'" x2="'+(Wd-R)+'" y1="'+y(t[0])+'" y2="'+y(t[0])+'"/><text x="'+(L-8)+'" y="'+(y(t[0])+5)+'" text-anchor="end">'+t[1]+'</text>';});
+  [0,50,100,150,200].forEach(n=>{s+='<text x="'+x(n)+'" y="'+(H-Bt+20)+'" text-anchor="middle">'+n+'</text>';});
+  s+='<text x="'+((L+Wd-R)/2)+'" y="'+(H-4)+'" text-anchor="middle">размерность задачи n</text>';
+  s+='<line class="ax" x1="'+L+'" x2="'+L+'" y1="'+Tp+'" y2="'+(H-Bt)+'"/><line class="ax" x1="'+L+'" x2="'+(Wd-R)+'" y1="'+(H-Bt)+'" y2="'+(H-Bt)+'"/>';
+  const ram=Math.log10(64*8*1e9);
+  s+='<line class="ref" x1="'+L+'" x2="'+(Wd-R)+'" y1="'+y(ram)+'" y2="'+y(ram)+'"/><text x="'+(L+6)+'" y="'+(y(ram)-6)+'" fill="var(--path)">64 ГБ ОЗУ</text>';
+  for(let D=1;D<=8;D++){
+    let d='',last=null;
+    for(let n=2;n<=200;n++){const lg=Math.log10(64*n*n)+n/D*Math.log10(2); if(lg>18) break; d+=(d?'L':'M')+x(n).toFixed(1)+' '+y(lg).toFixed(1)+' '; last=[n,lg];}
+    s+='<path d="'+d+'" fill="none" stroke="var(--cur)" stroke-width="'+(D===1?2.5:1.8)+'" stroke-opacity="'+(0.4+D*0.075)+'"/>';
+    if(last){const atTop=last[0]<199; const lx=atTop?x(last[0])+6:Wd-R+4, ly=atTop?(Tp+4+(D%2)*15):y(last[1])+5; s+='<text x="'+lx+'" y="'+ly+'" fill="var(--cur)" class="mono" font-size="14"'+(atTop?' text-anchor="middle"':'')+'>D='+D+'</text>';}
+  }
+  host.innerHTML=s+'</svg>';
+}
+function expChart(){
+  const host=document.getElementById('expChart'); if(!host) return;
+  const Wd=620,H=368,L=70,R=20,Tp=18,Bt=54;
+  const x=n=>L+((n-10)/26)*(Wd-L-R), y=t=>Tp+(1-(Math.log10(t)+6)/(8))*(H-Tp-Bt); // 1e-6 … 1e2 с
+  let s='<svg viewBox="0 0 '+Wd+' '+H+'">';
+  const yt=[[1e-6,'1 мкс'],[1e-5,'10 мкс'],[1e-4,'100 мкс'],[1e-3,'1 мс'],[1e-2,'10 мс'],[1e-1,'100 мс'],[1,'1 с'],[10,'10 с'],[100,'100 с']];
+  yt.forEach(t=>{s+='<line class="grid" x1="'+L+'" x2="'+(Wd-R)+'" y1="'+y(t[0])+'" y2="'+y(t[0])+'"/><text x="'+(L-8)+'" y="'+(y(t[0])+5)+'" text-anchor="end">'+t[1]+'</text>';});
+  for(let n=10;n<=36;n+=2) s+='<text x="'+x(n)+'" y="'+(H-Bt+27)+'" text-anchor="middle">'+n+'</text>';
+  s+='<text x="'+((L+Wd-R)/2)+'" y="'+(H-3)+'" text-anchor="middle">число предметов n</text>';
+  s+='<line class="ax" x1="'+L+'" x2="'+L+'" y1="'+Tp+'" y2="'+(H-Bt)+'"/><line class="ax" x1="'+L+'" x2="'+(Wd-R)+'" y1="'+(H-Bt)+'" y2="'+(H-Bt)+'"/>';
+  const series=(idx,stroke,label,lx,ly,anchor)=>{
+    let d=''; EXP1.forEach(r=>{ if(r[idx]==null) return; d+=(d?'L':'M')+x(r[0]).toFixed(1)+' '+y(r[idx]).toFixed(1)+' '; });
+    s+='<path d="'+d+'" fill="none" stroke="'+stroke+'" stroke-width="2.4" stroke-linejoin="round"/>';
+    EXP1.forEach(r=>{ if(r[idx]==null) return; s+='<circle cx="'+x(r[0])+'" cy="'+y(r[idx])+'" r="4" fill="'+stroke+'" stroke="var(--panel)" stroke-width="2"/>'; });
+    s+='<text x="'+lx+'" y="'+ly+'" fill="'+stroke+'" font-size="16" font-weight="600"'+(anchor?' text-anchor="'+anchor+'"':'')+'>'+label+'</text>';
+  };
+  // проекция перебора на n = 50 (пунктир)
+  let d=''; for(let n=34;n<=36;n+=1){ d+=(d?'L':'M')+x(n).toFixed(1)+' '+y(15.23*Math.pow(2,n-34)).toFixed(1)+' '; }
+  s+='<path d="'+d+'" fill="none" stroke="var(--path)" stroke-width="1.6" stroke-dasharray="5 5"/>';
+  series(3,'var(--path)','полный перебор ×2 на предмет',x(26),y(0.35),'end');
+  series(1,'var(--cur)','ДП, полная таблица',x(24),y(2.5e-3),'end');
+  series(2,'var(--copy)','ДП, биты (64 в слове)',x(24),y(1.2e-5),'end');
+  host.innerHTML=s+'</svg>';
+}
+function parChart(){
+  const host=document.getElementById('parChart'); if(!host) return;
+  const Wd=540,H=340,L=56,R=16,Tp=18,Bt=46;
+  const x=p=>L+((p-0.5)/8.5)*(Wd-L-R), y=v=>Tp+(1-v/4)*(H-Tp-Bt), bw=44;
+  let s='<svg viewBox="0 0 '+Wd+' '+H+'">';
+  for(let v=0.5;v<=4;v+=0.5) s+='<line class="grid" x1="'+L+'" x2="'+(Wd-R)+'" y1="'+y(v)+'" y2="'+y(v)+'"/>'+(v%1===0?'<text x="'+(L-8)+'" y="'+(y(v)+5)+'" text-anchor="end">'+v+'×</text>':'');
+  s+='<text x="'+((L+Wd-R)/2)+'" y="'+(H-4)+'" text-anchor="middle">число потоков p</text>';
+  s+='<line class="ax" x1="'+L+'" x2="'+L+'" y1="'+Tp+'" y2="'+(H-Bt)+'"/><line class="ax" x1="'+L+'" x2="'+(Wd-R)+'" y1="'+(H-Bt)+'" y2="'+(H-Bt)+'"/>';
+  s+='<line x1="'+x(1)+'" y1="'+y(1)+'" x2="'+x(4)+'" y2="'+y(4)+'" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="6 5"/><text x="'+(x(4)+8)+'" y="'+(y(3.85))+'" font-size="14">идеальное ускорение p× (при p = 8 — 8×)</text>';
+  EXP3.forEach(r=>{
+    const h=y(1)-y(r[2]); // от базовой линии 1×? рисуем от 0
+    s+='<rect x="'+(x(r[0])-bw/2)+'" y="'+y(r[2])+'" width="'+bw+'" height="'+(H-Bt-y(r[2]))+'" rx="4" fill="var(--cur)" fill-opacity=".85"/>';
+    s+='<text x="'+x(r[0])+'" y="'+(y(r[2])-8)+'" text-anchor="middle" class="lbl mono" font-size="15" font-weight="600">'+fmt(r[2].toFixed(2))+'×</text>';
+    s+='<text x="'+x(r[0])+'" y="'+(H-Bt+20)+'" text-anchor="middle">'+r[0]+'</text>';
+  });
+  host.innerHTML=s+'</svg>';
+}
+memChart(); expChart(); parChart();
+
+/* таблицы приложения */
+(function(){
+  const us=v=>v==null?'—':fmt((v*1e6).toFixed(0));
+  const ms=v=>v==null?'—':fmt((v*1e3).toFixed(2));
+  let h='<tr><th>n</th><th>w</th><th>ДП, мкс</th><th>биты, мкс</th><th>перебор, с</th></tr>';
+  const wv={10:121539,12:128704,14:103614,16:142914,18:147191,20:127358,22:111673,24:101255,26:122984,28:151050,30:105588,32:153009,34:118078,36:119567};
+  EXP1.forEach(r=>{h+='<tr><td>'+r[0]+'</td><td>'+wv[r[0]]+'</td><td>'+us(r[1])+'</td><td>'+us(r[2])+'</td><td>'+(r[3]==null?'—':fmt(r[3].toFixed(r[3]<0.01?5:3)))+'</td></tr>';});
+  document.getElementById('tabExp1').innerHTML=h;
+  h='<tr><th>w</th><th>ДП, мс</th><th>биты, мс</th></tr>';
+  EXP2.forEach(r=>{h+='<tr><td>2<sup>'+r[0]+'</sup></td><td>'+ms(r[1])+'</td><td>'+ms(r[2])+'</td></tr>';});
+  document.getElementById('tabExp2').innerHTML=h;
+  h='<tr><th>p</th><th>t, мс</th><th>S</th></tr>';
+  EXP3.forEach(r=>{h+='<tr><td>'+r[0]+'</td><td>'+ms(r[1])+'</td><td>'+fmt(r[2].toFixed(2))+'</td></tr>';});
+  document.getElementById('tabExp3').innerHTML=h;
+})();
+
+/* ====================================================================
+   движок
+   ==================================================================== */
+const SEC={'':'', '1':'1 · Введение','2':'2 · Алгоритм','3':'3 · Последовательная реализация','4':'4 · Параллельная реализация','5':'5 · Выводы','6':'6 · Источники','7':'7 · Приложения'};
+const slides=[...document.querySelectorAll('.slide')];
+const stage=document.getElementById('stage');
+let cur=0, step=0;
+slides.forEach((sl,i)=>{
+  const n=sl.querySelector('.foot .num'); if(n) n.textContent=(i+1)+' / '+slides.length;
+  const f=sl.querySelector('.foot > span:first-child'); const sec=sl.dataset.sec||'';
+  if(f && sec){ const b=document.createElement('span'); b.className='sec'; b.textContent=SEC[sec].split(' · ')[0]; f.prepend(b); }
+});
+const fragsOf=i=>[...slides[i].querySelectorAll('.frag')];
+
+function applyEffects(i){
+  const sl=slides[i];
+  sl.querySelectorAll('table.dp td').forEach(td=>td.classList.remove('cur','copy','bad'));
+  sl.querySelectorAll('table.dp:not(#t1):not(#t5) td').forEach(td=>td.classList.remove('take'));
+  sl.querySelectorAll('.items .item').forEach(it=>it.classList.remove('hot','take','skip'));
+  sl.querySelectorAll('tr.rowfrag').forEach(tr=>tr.classList.remove('on'));
+  fragsOf(i).forEach((f,j)=>{
+    const on=j<step; f.classList.toggle('on',on); if(!on) return;
+    if(f.dataset.cells){
+      const tid=f.dataset.table, cls=f.dataset.cls||'cur';
+      f.dataset.cells.split(/\s+/).forEach(c=>{const td=document.getElementById(tid+'-'+c); if(td) td.classList.add(cls);});
+    }
+    if(f.dataset.row){const tr=sl.querySelector('#t1 tr[data-k="'+f.dataset.row+'"]'); if(tr) tr.classList.add('on');}
+    if(f.dataset.items){const it=sl.querySelectorAll('#fillItems .item'); it.forEach(x=>x.classList.remove('hot')); const k=+f.dataset.items; if(it[k-1]) it[k-1].classList.add('hot');}
+    if(f.dataset.take){const it=sl.querySelectorAll('#btItems .item'); it[+f.dataset.take-1].classList.add('take');}
+    if(f.dataset.skip){const it=sl.querySelectorAll('#btItems .item'); it[+f.dataset.skip-1].classList.add('skip');}
+  });
+}
+
+function show(i,s){
+  cur=Math.max(0,Math.min(slides.length-1,i));
+  const n=fragsOf(cur).length;
+  step=Math.max(0,Math.min(n,s===undefined?0:s));
+  slides.forEach((sl,j)=>sl.classList.toggle('active',j===cur));
+  applyEffects(cur);
+  document.getElementById('bar').style.width=((cur+(n?step/n:1))/slides.length*100)+'%';
+  try{history.replaceState(null,'','#'+(cur+1)+(step?'.'+step:''));}catch(e){}
+  if(presenter) renderPresenter();
+}
+function next(){ if(step<fragsOf(cur).length) show(cur,step+1); else if(cur<slides.length-1) show(cur+1,0); }
+function prev(){ if(step>0) show(cur,step-1); else if(cur>0) show(cur-1,fragsOf(cur-1).length); }
+
+/* ---------- масштабирование сцены ---------- */
+function fit(){
+  if(presenter){
+    const fr=document.getElementById('pv-frame'); const w=fr.clientWidth; const s=w/1280;
+    fr.style.height=Math.round(720*s)+'px';
+    const r=fr.getBoundingClientRect();
+    stage.style.transform='translate('+r.left+'px,'+r.top+'px) scale('+s+')';
+    return;
+  }
+  const s=Math.min(innerWidth/1280,innerHeight/720);
+  const dx=(innerWidth-1280*s)/2, dy=(innerHeight-720*s)/2;
+  stage.style.transform='translate('+dx+'px,'+dy+'px) scale('+s+')';
+}
+addEventListener('resize',fit);
+
+/* ---------- тема ---------- */
+const root=document.documentElement;
+function setTheme(t){root.dataset.theme=t; try{localStorage.setItem('deck-theme',t);}catch(e){} }
+try{const t=localStorage.getItem('deck-theme'); if(t) root.dataset.theme=t;}catch(e){}
+document.getElementById('btnTheme').onclick=()=>setTheme(root.dataset.theme==='dark'?'light':'dark');
+/* на телефоне «?» не открывает подсказку: 5 быстрых нажатий показывают кнопку «доклад» */
+let taps=[];
+document.getElementById('btnHelp').onclick=()=>{
+  if(!phone){ document.getElementById('help').classList.toggle('open'); return; }
+  const now=Date.now(); taps=taps.filter(t=>now-t<2500); taps.push(now);
+  if(taps.length>=5){ taps=[]; document.body.classList.add('unlocked'); try{sessionStorage.setItem('pv-unlocked','1');}catch(e){} }
+};
+document.getElementById('btnPdf').onclick=()=>print();
+document.getElementById('help').onclick=e=>{if(e.target.id==='help') e.target.classList.remove('open');};
+
+/* ---------- печать: раскрыть всё ---------- */
+let saved=null;
+addEventListener('beforeprint',()=>{saved=[cur,step]; document.querySelectorAll('tr.rowfrag').forEach(tr=>tr.classList.add('on')); slides.forEach((sl,i)=>{const n=fragsOf(i).length; const c=cur,s=step; cur=i;step=n; applyEffects(i); cur=c;step=s;});});
+addEventListener('afterprint',()=>{if(saved) show(saved[0],saved[1]);});
+
+/* ---------- клавиши ---------- */
+let numBuf='';
+addEventListener('keydown',e=>{
+  if(e.metaKey||e.ctrlKey||e.altKey) return;
+  if(/^[0-9]$/.test(e.key)){ numBuf+=e.key; return; }
+  if(e.key==='Enter' && numBuf){ show(+numBuf-1,0); numBuf=''; return; }
+  numBuf='';
+  switch(e.key){
+    case 'ArrowRight': case ' ': case 'PageDown': case 'ArrowDown': e.preventDefault(); next(); break;
+    case 'ArrowLeft': case 'PageUp': case 'ArrowUp': e.preventDefault(); prev(); break;
+    case 'Home': show(0,0); break;
+    case 'End': show(slides.length-1,fragsOf(slides.length-1).length); break;
+    case 't': case 'T': case 'е': case 'Е': setTheme(root.dataset.theme==='dark'?'light':'dark'); break;
+    case 'f': case 'F': case 'а': case 'А': document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen(); break;
+    case 'p': case 'P': case 'з': case 'З': print(); break;
+    case 'b': case 'B': case 'и': case 'И': stage.style.visibility=stage.style.visibility==='hidden'?'':'hidden'; break;
+    case '?': case '/': document.getElementById('help').classList.toggle('open'); break;
+    case 'Escape': document.getElementById('help').classList.remove('open'); break;
+  }
+});
+/* ---------- клик / свайп (проектор) ---------- */
+stage.addEventListener('click',e=>{ if(presenter) return; if(e.target.closest('a,button')) return; (e.clientX<innerWidth*0.15)?prev():next(); });
+let tx=null,ty=null;
+addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY;},{passive:true});
+addEventListener('touchend',e=>{ if(tx===null) return; const dx=e.changedTouches[0].clientX-tx, dy=e.changedTouches[0].clientY-ty; tx=null; if(Math.abs(dx)>50 && Math.abs(dx)>Math.abs(dy)*1.5){dx<0?next():prev();} });
+
+/* ====================================================================
+   режим докладчика (телефон)
+   ==================================================================== */
+const qs=new URLSearchParams(location.search);
+const phone=matchMedia('(max-width: 900px) and (pointer: coarse)').matches;
+const presenter = qs.has('presenter');   // на телефоне по умолчанию — только слайды; текст доклада открывается вручную
+if(phone) document.body.classList.add('phone');
+try{ if(phone && sessionStorage.getItem('pv-unlocked')) document.body.classList.add('unlocked'); }catch(e){}
+if(presenter) document.body.classList.add('presenter');
+
+const notesOf=i=>{const n=slides[i].querySelector('.notes'); return n?n.innerHTML.trim():'';};
+const titleOf=i=>{const h=slides[i].querySelector('h2,h1'); return h?h.childNodes[0].textContent.trim():'';};
+let pvFont=18;
+try{pvFont=+localStorage.getItem('pv-font')||18;}catch(e){}
+
+function renderPresenter(){
+  const n=fragsOf(cur).length;
+  document.getElementById('pv-num').textContent=cur+1;
+  document.getElementById('pv-total').textContent=slides.length;
+  document.getElementById('pv-step').textContent=step+'/'+n;
+  const nx=document.getElementById('pv-next');
+  if(step<n) nx.innerHTML='следующий шаг: <b>'+(step+1)+' из '+n+'</b>';
+  else if(cur<slides.length-1) nx.innerHTML='далее слайд '+(cur+2)+': <b>'+titleOf(cur+1)+'</b>';
+  else nx.innerHTML='последний слайд';
+  const txt=document.getElementById('pv-text');
+  if(txt.dataset.slide!==String(cur) || txt.dataset.font!==String(pvFont)){
+    // текст перестраивается только при смене слайда или размера шрифта; при смене шага скролл не трогаем
+    const sec=SEC[slides[cur].dataset.sec||'']||'';
+    const paras=notesOf(cur).split(/\n+/).map(p=>'<p>'+p.replace(/⏵/g,'<span class="go">→</span>')+'</p>').join('');
+    txt.innerHTML=(sec?'<div class="sec">'+sec+'</div>':'')+'<p style="color:var(--muted);font-size:.85em;margin-bottom:.6em">'+titleOf(cur)+'</p>'+paras;
+    txt.style.fontSize=pvFont+'px';
+    if(txt.dataset.slide!==String(cur)) txt.scrollTop=0;
+    txt.dataset.slide=String(cur); txt.dataset.font=String(pvFont);
+  }
+  // подсветить n-й маркер шага и подвести его в зону видимости, если он ушёл за край
+  const gos=txt.querySelectorAll('.go'); gos.forEach((g,j)=>{ g.style.opacity=j<step?'.35':'1'; g.style.outline=j===step?'2px solid var(--cur)':''; });
+  const g=gos[step]; if(g){ const r=g.getBoundingClientRect(), t=txt.getBoundingClientRect(); if(r.bottom>t.bottom-20||r.top<t.top) g.scrollIntoView({block:'center',behavior:'smooth'}); }
+}
+if(presenter){
+  document.getElementById('pv-prev').onclick=prev;
+  document.getElementById('pv-next-btn').onclick=next;
+  document.getElementById('pv-slides').onclick=()=>{location.href=location.pathname+'?slides'+location.hash;};
+  document.querySelectorAll('#pv-fs button[data-d]').forEach(b=>b.onclick=()=>{pvFont=Math.max(14,Math.min(26,pvFont+ +b.dataset.d)); try{localStorage.setItem('pv-font',pvFont);}catch(e){} renderPresenter();});
+  // таймер
+  let t0=null; const tm=document.getElementById('pv-timer');
+  try{const s=sessionStorage.getItem('pv-t0'); if(s) t0=+s;}catch(e){}
+  const tick=()=>{ if(t0===null){tm.textContent='00:00';return;} const d=Math.floor((Date.now()-t0)/1000); tm.textContent=String(Math.floor(d/60)).padStart(2,'0')+':'+String(d%60).padStart(2,'0'); tm.classList.toggle('warn',d>=18*60); };
+  setInterval(tick,1000); tick();
+  const startTimer=()=>{ if(t0===null){t0=Date.now(); try{sessionStorage.setItem('pv-t0',t0);}catch(e){}} };
+  tm.onclick=()=>{ t0=null; try{sessionStorage.removeItem('pv-t0');}catch(e){} tick(); };
+  ['pv-prev','pv-next-btn'].forEach(id=>document.getElementById(id).addEventListener('click',startTimer));
+  // не гасить экран
+  const wake=async()=>{try{await navigator.wakeLock.request('screen');}catch(e){}};
+  if('wakeLock' in navigator){ wake(); document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible') wake();}); }
+  // свайп по тексту тоже листает (обрабатывается глобально); клик по превью — вперёд
+  document.getElementById('pv-frame').addEventListener('click',next);
+  addEventListener('orientationchange',()=>setTimeout(fit,150));
+}else if(phone){
+  document.getElementById('pv-back').onclick=()=>{location.href=location.pathname+'?presenter'+location.hash;};
+}
+
+/* старт */
+fit();
+const m=(location.hash||'').match(/#(\d+)(?:\.(\d+))?/);
+show(m?+m[1]-1:0, m&&m[2]?+m[2]:0);
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(fit);
+})();
+</script>
+</body>
+</html>
